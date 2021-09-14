@@ -5,9 +5,8 @@ from wifineparse import wifine
 import random
 from tqdm import tqdm
 import sys
-
-
-torch.set_num_threads(1)
+import logging
+import os
 
 
 def flatten(ll: list[list]):
@@ -66,8 +65,25 @@ def get_entity_token_idx_to_figer_type(doc):
 
 
 if __name__ == '__main__':
+    datetime_str = util.get_datetime_str()
+    log_filename = f'Log_pretrain_luke_on_wifine-{datetime_str}.log'
+    logging.basicConfig(
+        format='%(levelname)s:%(asctime)s %(message)s',
+        filename=log_filename,
+        level=logging.DEBUG
+    )
+    os.system(f'open {log_filename}')
+    # print(f'open {log_filename}')
+
+
+    if False:
+        PYTORCH_NUM_THREADS = 1
+        logging.info(f'Setting num threads to {PYTORCH_NUM_THREADS}')
+        torch.set_num_threads(PYTORCH_NUM_THREADS)
+
+
     # make luke model and tokenizer
-    print('Initializing Model and Tokenizer')
+    logging.info('Initializing Model and Tokenizer')
     config = LukeConfig() 
     config.num_labels = len(wifine.FIGER_VOCAB) + 1
     
@@ -77,22 +93,30 @@ if __name__ == '__main__':
     model = LukeForEntityClassification(config)
     model.luke = LukeModel.from_pretrained('studio-ousia/luke-base')
     tokenizer = LukeTokenizer.from_pretrained('studio-ousia/luke-base', task='entity_classification')
+    logging.info('Model initialized fresh')
+    logging.info(f'config = {config}')
+    logging.info(f'model = {model}')
+    logging.info(f'tokenizer = {tokenizer}')
 
     # get train dataset
-    document_ids = get_document_ids_to_train_with(fraction=0.1)
+    train_document_ids = get_document_ids_to_train_with(num=1)
+    valid_document_ids = train_document_ids # for testing purposes
+    logging.debug(f'train_document_ids = {train_document_ids}')
+    logging.debug(f'valid_document_ids = {valid_document_ids}')
 
     # learning setup
     opt = torch.optim.Adam(model.parameters(), lr=1e-4)
+    logging.debug(f'opt = {opt}')
 
-    NUM_EPOCHS = 10
+    NUM_EPOCHS = 1
 
-    for epoch in range(1, NUM_EPOCHS + 1):
-        print(f'Start epoch {epoch}')
+    for epoch in tqdm(range(1, NUM_EPOCHS + 1), desc='epochs', ncols=70, leave=False):
+        logging.info(f'Start epoch {epoch}')
         opt.zero_grad()
         total_loss = torch.tensor(0.0)
 
         # train one epoch
-        for doc_id in document_ids:
+        for doc_id in tqdm(train_document_ids, desc='train', leave=False, ncols=70):
             # extract resources
             document = wifine.DOCUMENT_INDEX.get_document(doc_id)
 
@@ -140,12 +164,16 @@ if __name__ == '__main__':
 
             opt.step()
 
-        print(f'epoch {epoch} avg loss {total_loss / len(labels)}')
+        logging.info('Training')
+        logging.info(f'total_loss = {total_loss}')
+        logging.info(f'num labels = {len(labels)}')
+        logging.info(f'avg loss = {total_loss / len(labels)}')
 
         num_correct = 0
         total_predictions = 0
 
-        for doc_id in document_ids:
+        # validate
+        for doc_id in tqdm(valid_document_ids, desc='validate', leave=False, ncols=70):
             # extract resources
             document = wifine.DOCUMENT_INDEX.get_document(doc_id)
 
@@ -192,8 +220,10 @@ if __name__ == '__main__':
                 if prediction == label:
                     num_correct += 1
 
-        print(num_correct)
-        print(total_predictions)
+        logging.info('Validation')
+        logging.info(f'num_correct = {num_correct}')
+        logging.info(f'total_predictions = {total_predictions}')
 
-    util.save_checkpoint(model, opt, NUM_EPOCHS)
+    checkpoint_name = util.save_checkpoint(model, opt, NUM_EPOCHS)
+    logging.info(f'Saved checkpoint {checkpoint_name}')
 
