@@ -1,39 +1,21 @@
-import torch
-from transformers import LukeTokenizer, LukeForEntityClassification, LukeConfig, LukeModel
-import util
-from wifineparse import wifine
-import random
-from tqdm import tqdm
-import sys
 import logging
-import os
+
+import torch
+
+import util
+import luke_util
+from wifineparse import wifine
 
 
 def flatten(ll: list[list]):
     return [e for l in ll for e in l]
 
 
-def get_word_start_end_positions(tokens: list[str]) -> tuple[list[int], list[int]]:
-    start_positions = []
-    end_positions = []
-
-    curr = 0
-
-    for token in tokens:
-        L = len(token)
-        start_positions.append(curr)
-        end_positions.append(curr + L)
-        curr += L + 1
-
-    return start_positions, end_positions
-
-
 def get_document_ids_to_train_with(num=None, fraction=None):
     if fraction: 
-        num = fraction * len(wifine.DOCUMENT_INDEX.all_docids())
+        num = int(fraction * len(wifine.DOCUMENT_INDEX.all_docids()))
     
     return wifine.DOCUMENT_INDEX.all_docids()[:num]
-    # return random.choices(wifine.DOCUMENT_INDEX.all_docids(), k=num)
 
 
 def get_sentence_offsets(doc):
@@ -65,38 +47,16 @@ def get_entity_token_idx_to_figer_type(doc):
 
 
 if __name__ == '__main__':
-    datetime_str = util.get_datetime_str()
-    log_filename = f'Log_pretrain_luke_on_wifine-{datetime_str}.log'
-    logging.basicConfig(
-        format='%(levelname)s:%(asctime)s %(message)s',
-        filename=log_filename,
-        level=logging.DEBUG
-    )
-    os.system(f'open {log_filename}')
-    # print(f'open {log_filename}')
-
-
-    if False:
-        PYTORCH_NUM_THREADS = 1
-        logging.info(f'Setting num threads to {PYTORCH_NUM_THREADS}')
-        torch.set_num_threads(PYTORCH_NUM_THREADS)
-
+    util.init_logging()
+    # util.pytorch_set_num_threads(1)
 
     # make luke model and tokenizer
-    logging.info('Initializing Model and Tokenizer')
-    config = LukeConfig() 
-    config.num_labels = len(wifine.FIGER_VOCAB) + 1
+    model, tokenizer = luke_util.make_model_and_tokenizer(
+        num_labels=len(wifine.FIGER_VOCAB) + 1
+    )
     
-    # the label that reprents no entity type (i.e. 'O')
-    NO_ENTITY_TYPE = len(wifine.FIGER_VOCAB)
-
-    model = LukeForEntityClassification(config)
-    model.luke = LukeModel.from_pretrained('studio-ousia/luke-base')
-    tokenizer = LukeTokenizer.from_pretrained('studio-ousia/luke-base', task='entity_classification')
-    logging.info('Model initialized fresh')
-    logging.info(f'config = {config}')
-    logging.info(f'model = {model}')
-    logging.info(f'tokenizer = {tokenizer}')
+    # the label that represents no entity type (i.e. 'O')
+    NON_ENTITY_LABEL = len(wifine.FIGER_VOCAB)
 
     # get train dataset
     train_document_ids = get_document_ids_to_train_with(num=1)
@@ -108,122 +68,63 @@ if __name__ == '__main__':
     opt = torch.optim.Adam(model.parameters(), lr=1e-4)
     logging.debug(f'opt = {opt}')
 
-    NUM_EPOCHS = 1
+    NUM_EPOCHS = 10
 
-    for epoch in tqdm(range(1, NUM_EPOCHS + 1), desc='epochs', ncols=70, leave=False):
-        logging.info(f'Start epoch {epoch}')
-        opt.zero_grad()
-        total_loss = torch.tensor(0.0)
+    for epoch in util.mytqdm(range(1, NUM_EPOCHS + 1), desc='epochs'):
+        stats = luke_util.make_train_stats_dict()
 
-        # train one epoch
-        for doc_id in tqdm(train_document_ids, desc='train', leave=False, ncols=70):
+        for doc_id in util.mytqdm(train_document_ids, desc='train'):
+            opt.zero_grad()
+
             # extract resources
             document = wifine.DOCUMENT_INDEX.get_document(doc_id)
-
-            text = document.sentences_as_tokens()
-            text = flatten(text)
-            num_tokens = len(text)
-            starts, ends = get_word_start_end_positions(text)
-            text = ' '.join(text)
+            tokens = flatten(document.sentences_as_tokens())
 
             figer_types = get_entity_token_span_to_figer_types(document)
+            # choose just one figer type for each entity span
+            # TODO: how should we incorporate multiple figer types into pretraining?
+            figer_types = {k: v[0] for k, v in figer_types.items()}
 
-            # text: str
-            # starts: token_idx -> char_idx
-            # ends: token_idx -> char_idx
-            # figer_types: (token_idx, token_idx) -> figer_type
-
-            # train on figer types
-
-            entity_spans = []
-            labels = []
-            for (start_token_idx, end_token_idx), figer_types in figer_types.items():
-                labels.append(figer_types[0])
-                entity_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
-
-            non_entity_spans = []
-            for start_token_idx in range(num_tokens):
-                for end_token_idx in range(num_tokens):
-                    if (start_token_idx, end_token_idx) not in figer_types:
-                        non_entity_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
-            non_entity_spans = random.choices(non_entity_spans, k=len(entity_spans))
-            labels += [NO_ENTITY_TYPE] * len(non_entity_spans)
-
-            assert len(labels) == len(entity_spans) + len(non_entity_spans)
-
-            for entity_span, label in zip(entity_spans + non_entity_spans, labels):
-                inputs = tokenizer(
-                    text, 
-                    entity_spans=[entity_span],
-                    return_tensors='pt'
-                )
-                outputs = model(**inputs, labels=torch.tensor([label]))
-
-                outputs.loss.backward()
-                total_loss += outputs.loss
+            luke_util.train_luke_model(
+                model,
+                tokenizer,
+                tokens,
+                entity_spans_to_labels=figer_types,
+                non_entity_label=NON_ENTITY_LABEL,
+                stats=stats
+            )
 
             opt.step()
 
-        logging.info('Training')
-        logging.info(f'total_loss = {total_loss}')
-        logging.info(f'num labels = {len(labels)}')
-        logging.info(f'avg loss = {total_loss / len(labels)}')
-
-        num_correct = 0
-        total_predictions = 0
+        logging.info(f'stats = {stats}')
+        # util.save_checkpoint(model, opt, epoch)
 
         # validate
-        for doc_id in tqdm(valid_document_ids, desc='validate', leave=False, ncols=70):
-            # extract resources
-            document = wifine.DOCUMENT_INDEX.get_document(doc_id)
+        correct = 0
+        total = 0
 
-            text = document.sentences_as_tokens()
-            text = flatten(text)
-            num_tokens = len(text)
-            starts, ends = get_word_start_end_positions(text)
-            text = ' '.join(text)
+        for doc_id in util.mytqdm(valid_document_ids, desc='validate'):
+            document = wifine.DOCUMENT_INDEX.get_document(doc_id)
+            tokens = flatten(document.sentences_as_tokens())
 
             figer_types = get_entity_token_span_to_figer_types(document)
+            figer_types = {k: v[0] for k, v in figer_types.items()}
 
-            # text: str
-            # starts: token_idx -> char_idx
-            # ends: token_idx -> char_idx
-            # figer_types: (token_idx, token_idx) -> figer_type
+            doc_correct, doc_total = luke_util.acid_test_luke_model(
+                model,
+                tokenizer,
+                tokens,
+                entity_spans_to_labels=figer_types,
+                non_entity_label=NON_ENTITY_LABEL
+            )
 
-            # train on figer types
-            entity_spans = []
-            labels = []
-            for (start_token_idx, end_token_idx), figer_types in figer_types.items():
-                labels.append(figer_types[0])
-                entity_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
-
-            non_entity_spans = []
-            for start_token_idx in range(num_tokens):
-                for end_token_idx in range(num_tokens):
-                    if (start_token_idx, end_token_idx) not in figer_types:
-                        non_entity_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
-            non_entity_spans = random.choices(non_entity_spans, k=len(entity_spans))
-            labels += [NO_ENTITY_TYPE] * len(non_entity_spans)
-
-            assert len(labels) == len(entity_spans) + len(non_entity_spans)
-
-            for entity_span, label in zip(entity_spans + non_entity_spans, labels):
-                inputs = tokenizer(
-                    text, 
-                    entity_spans=[entity_span],
-                    return_tensors='pt'
-                )
-                outputs = model(**inputs)
-                prediction = outputs.logits.argmax(-1).item()
-
-                total_predictions += 1
-                if prediction == label:
-                    num_correct += 1
+            correct += doc_correct
+            total += doc_total
 
         logging.info('Validation')
-        logging.info(f'num_correct = {num_correct}')
-        logging.info(f'total_predictions = {total_predictions}')
+        logging.info(f'num_correct = {correct}')
+        logging.info(f'total_predictions = {total}')
 
-    checkpoint_name = util.save_checkpoint(model, opt, NUM_EPOCHS)
-    logging.info(f'Saved checkpoint {checkpoint_name}')
+    # checkpoint_name = util.save_checkpoint(model, opt, NUM_EPOCHS)
+    # logging.info(f'Saved checkpoint {checkpoint_name}')
 
