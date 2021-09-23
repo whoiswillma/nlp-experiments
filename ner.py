@@ -29,7 +29,7 @@ def extract_nets(tokens: List[str], tags: List[str]) -> List[Tuple[str, str]]:
             
         elif bio == 'I':
             if not (tag == current_tag):
-                raise Exception(f'Invalid transition {current_tag} -> I-{-tag}')
+                raise Exception(f'Invalid transition {current_tag} -> I-{tag}')
             current_named_entity.append(token)
             
         else:
