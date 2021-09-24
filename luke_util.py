@@ -1,10 +1,9 @@
 import logging
 import random
 from typing import Collection, Optional
-from transformers import LukeConfig, LukeForEntityClassification, LukeModel, LukeTokenizer
-import torch
 
-import util
+import torch
+from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
 
 
 def get_word_start_end_positions(tokens: list[str]) -> tuple[list[int], list[int]]:
@@ -22,46 +21,118 @@ def get_word_start_end_positions(tokens: list[str]) -> tuple[list[int], list[int
     return start_positions, end_positions
 
 
+def take_closure_over_entity_spans_to_labels(
+        entity_spans_to_labels: dict[tuple[int, int], int]
+) -> dict[tuple[int, int], int]:
+    """Returns a closure over `entity_spans_to_labels` such that, for every
+    entity span (i, j) and associated label l, all sub spans (i', j') such that
+    i <= i' < j' <= j is associated with l in its closure.
+    """
+
+    idx_to_label: list[Optional[int]] = [None] * max(end for _, end in entity_spans_to_labels)
+    for entity_span, label in entity_spans_to_labels.items():
+        start, end = entity_span
+        for i in range(start, end):
+            idx_to_label[i] = label
+
+    closure: dict[tuple[int, int], int] = {}
+
+    def add_all_spans_to_closure(start, end, label):
+        for inner_start in range(start, end):
+            for inner_end in range(inner_start + 1, end + 1):
+                closure[(inner_start, inner_end)] = label
+
+    prev_label = None
+    start_index = None
+
+    # causes loop body to execute one more time if current_label != None
+    idx_to_label += [None]
+
+    for i, label in enumerate(idx_to_label):
+        if prev_label != label:
+            if prev_label:
+                add_all_spans_to_closure(start_index, i, prev_label)
+
+            prev_label = label
+            start_index = i
+
+    return closure
+
+
+def take_closure_over_entity_spans(
+        entity_spans: Collection[tuple[int, int]]
+) -> Collection[tuple[int, int]]:
+    fake_entity_spans_to_labels = { entity_span: 0 for entity_span in entity_spans }
+    fake_entity_spans_to_labels = take_closure_over_entity_spans_to_labels(fake_entity_spans_to_labels)
+    return fake_entity_spans_to_labels.keys()
+
+
 def get_entity_char_spans_and_labels(
         tokens: list[str],
         entity_spans_to_labels: dict[tuple[int, int], int],
-):
+) -> tuple[list[tuple[int, int]], list[int]]:
 
     starts, ends = get_word_start_end_positions(tokens)
+    entity_spans_to_labels = take_closure_over_entity_spans_to_labels(entity_spans_to_labels)
 
-    entity_spans = []
-    labels = []
+    entity_char_spans: list[tuple[int, int]] = []
+    labels: list[int] = []
 
     for (start_token_idx, end_token_idx), label in entity_spans_to_labels.items():
-        entity_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
+        entity_char_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
         labels.append(label)
 
-    return entity_spans, labels
+    return entity_char_spans, labels
 
 
-def get_non_entity_char_spans(
+def get_nonentity_char_spans(
         tokens: list[str],
         entity_spans: Collection[tuple[int, int]],
         max_span_len: Optional[int] = None,
         choose_k: Optional[int] = None
 ) -> list[tuple[int, int]]:
 
+    entity_spans = take_closure_over_entity_spans(entity_spans)
     num_tokens = len(tokens)
     starts, ends = get_word_start_end_positions(tokens)
 
-    non_entity_spans = []
-    for start_token_idx in range(0, num_tokens):
-        for end_token_idx in range(start_token_idx + 1, num_tokens + 1):
-            if max_span_len and end_token_idx - start_token_idx > max_span_len:
-                continue
+    max_span_len = max_span_len or num_tokens
 
+    non_entity_char_spans = []
+    for start_token_idx in range(0, num_tokens):
+        for end_token_idx in range(start_token_idx + 1, min(num_tokens, start_token_idx + max_span_len) + 1):
             if (start_token_idx, end_token_idx) not in entity_spans:
-                non_entity_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
+                non_entity_char_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
 
     if choose_k:
-        non_entity_spans = random.choices(non_entity_spans, k=choose_k)
+        non_entity_char_spans = random.choices(non_entity_char_spans, k=choose_k)
 
-    return non_entity_spans
+    return non_entity_char_spans
+
+
+def get_entity_and_nonentity_char_spans_and_labels(
+        tokens: list[str],
+        entity_spans_to_labels: dict[tuple[int, int], int],
+        nonentity_label: int,
+        max_nonentity_span_len: Optional[int] = 16,
+        nonentity_choose_k: Optional[int] = None
+) -> tuple[list[tuple[int, int]], list[int]]:
+
+    entity_char_spans, labels = get_entity_char_spans_and_labels(
+        tokens,
+        entity_spans_to_labels
+    )
+    nonentity_char_spans = get_nonentity_char_spans(
+        tokens,
+        entity_spans_to_labels.keys(),
+        max_span_len=max_nonentity_span_len,
+        choose_k=nonentity_choose_k
+    )
+    labels += [nonentity_label] * len(nonentity_char_spans)
+    char_spans = entity_char_spans + nonentity_char_spans
+    assert len(labels) == len(char_spans)
+
+    return char_spans, labels
 
 
 def make_model_and_tokenizer(num_labels):
@@ -70,9 +141,9 @@ def make_model_and_tokenizer(num_labels):
     config = LukeConfig() 
     config.num_labels = num_labels
 
-    model = LukeForEntityClassification(config)
+    model = LukeForEntitySpanClassification(config)
     model.luke = LukeModel.from_pretrained('studio-ousia/luke-base')
-    tokenizer = LukeTokenizer.from_pretrained('studio-ousia/luke-base', task='entity_classification')
+    tokenizer = LukeTokenizer.from_pretrained('studio-ousia/luke-base', task='entity_span_classification')
     logging.info('Model initialized fresh')
     logging.info(f'config = {config}')
     logging.info(f'model = {model}')
@@ -84,7 +155,7 @@ def make_model_and_tokenizer(num_labels):
 def make_train_stats_dict():
     return {
         'loss': 0.0,
-        'num_backprops': 0
+        'num_spans': 0
     }
 
 
@@ -100,17 +171,16 @@ def train_luke_model_on_entity_spans(
     entity_char_spans, labels = get_entity_char_spans_and_labels(tokens, entity_spans_to_labels)
     text = ' '.join(tokens)
 
-    for entity_char_span, label in util.mytqdm(list(zip(entity_char_spans, labels)), desc='entities'):
-        inputs = tokenizer(
-            text,
-            entity_spans=[entity_char_span],
-            return_tensors='pt'
-        )
-        outputs = model(**inputs, labels=torch.tensor([label]))
-        outputs.loss.backward()
+    inputs = tokenizer(
+        text,
+        entity_spans=entity_char_spans,
+        return_tensors='pt'
+    )
+    outputs = model(**inputs, labels=torch.tensor(labels).unsqueeze(0))
+    outputs.loss.backward()
 
-        stats['loss'] += outputs.loss.item()
-        stats['num_backprops'] += 1
+    stats['loss'] += outputs.loss.item()
+    stats['num_spans'] += len(entity_char_spans)
 
 
 def train_luke_model_on_non_entity_spans(
@@ -121,30 +191,29 @@ def train_luke_model_on_non_entity_spans(
         non_entity_label: int,
         stats: dict[str, any],
         choose_k: Optional[int] = None,
-        max_span_len: Optional[int] = 15
+        max_span_len: Optional[int] = 16
 ):
     model.train()
 
     text = ' '.join(tokens)
 
-    non_entity_char_spans = get_non_entity_char_spans(
+    non_entity_char_spans = get_nonentity_char_spans(
         tokens,
         entity_spans,
         max_span_len=max_span_len,
         choose_k=choose_k
     )
 
-    for non_entity_char_span in util.mytqdm(non_entity_char_spans, desc='non-entities'):
-        inputs = tokenizer(
-            text,
-            entity_spans=[non_entity_char_span],
-            return_tensors='pt'
-        )
-        outputs = model(**inputs, labels=torch.tensor([non_entity_label]))
-        outputs.loss.backward()
+    inputs = tokenizer(
+        text,
+        entity_spans=non_entity_char_spans,
+        return_tensors='pt'
+    )
+    outputs = model(**inputs, labels=torch.full((1, len(non_entity_char_spans)), non_entity_label))
+    outputs.loss.backward()
 
-        stats['loss'] += outputs.loss.item()
-        stats['num_backprops'] += 1
+    stats['loss'] += outputs.loss.item()
+    stats['num_spans'] += len(non_entity_char_spans)
 
 
 def train_luke_model(
@@ -152,26 +221,30 @@ def train_luke_model(
         tokenizer,
         tokens: list[str],
         entity_spans_to_labels: dict[tuple[int, int], int],
-        non_entity_label: int,
+        nonentity_label: int,
         stats: dict[str, any]
 ):
-    train_luke_model_on_entity_spans(
-        model,
-        tokenizer,
+
+    model.train()
+
+    all_char_spans, labels = get_entity_and_nonentity_char_spans_and_labels(
         tokens,
         entity_spans_to_labels,
-        stats
+        nonentity_label,
+        nonentity_choose_k=len(entity_spans_to_labels)
     )
+    text = ' '.join(tokens)
 
-    train_luke_model_on_non_entity_spans(
-        model,
-        tokenizer,
-        tokens,
-        entity_spans_to_labels.keys(),
-        non_entity_label,
-        stats,
-        choose_k=len(entity_spans_to_labels)
+    inputs = tokenizer(
+        text,
+        entity_spans=all_char_spans,
+        return_tensors='pt'
     )
+    outputs = model(**inputs, labels=torch.tensor(labels).unsqueeze(0))
+    outputs.loss.backward()
+
+    stats['loss'] += outputs.loss.item()
+    stats['num_spans'] += len(labels)
 
 
 def test_luke_model_on_entity_spans(
@@ -181,6 +254,7 @@ def test_luke_model_on_entity_spans(
         entity_spans: list[tuple[int, int]],
         entity_span_level: str
 ) -> list[int]:
+
     model.eval()
 
     if entity_span_level == 'token':
@@ -197,18 +271,15 @@ def test_luke_model_on_entity_spans(
         assert False
 
     text = ' '.join(tokens)
-    labels = []
-    for entity_char_span in util.mytqdm(entity_char_spans, desc='test'):
-        inputs = tokenizer(
-            text,
-            entity_spans=[entity_char_span],
-            return_tensors='pt'
-        )
-        outputs = model(**inputs)
-        label = outputs.logits.argmax(-1).item()
-        labels.append(label)
 
-    return labels
+    inputs = tokenizer(
+        text,
+        entity_spans=entity_char_spans,
+        return_tensors='pt'
+    )
+
+    outputs = model(**inputs)
+    return outputs.logits.argmax(-1).squeeze().tolist()
 
 
 def acid_test_luke_model(
@@ -216,29 +287,23 @@ def acid_test_luke_model(
         tokenizer,
         tokens: list[str],
         entity_spans_to_labels: dict[tuple[int, int], int],
-        non_entity_label: int
+        nonentity_label: int
 ):
-    entity_char_spans, entity_labels = get_entity_char_spans_and_labels(
+    all_char_spans, labels = get_entity_and_nonentity_char_spans_and_labels(
         tokens,
-        entity_spans_to_labels
+        entity_spans_to_labels,
+        nonentity_label,
+        nonentity_choose_k=len(entity_spans_to_labels)
     )
 
-    non_entity_char_spans = get_non_entity_char_spans(
-        tokens,
-        entity_spans_to_labels.keys(),
-        choose_k=len(entity_char_spans)
-    )
-
-    char_spans = entity_char_spans + non_entity_char_spans
-
-    labels = entity_labels + [non_entity_label] * len(non_entity_char_spans)
     predictions = test_luke_model_on_entity_spans(
         model,
         tokenizer,
         tokens,
-        entity_spans=char_spans,
+        entity_spans=all_char_spans,
         entity_span_level='char'
     )
+
     assert len(labels) == len(predictions)
 
     logging.debug(f'labels = {labels}, predictions = {predictions}')

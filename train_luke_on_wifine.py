@@ -56,7 +56,7 @@ if __name__ == '__main__':
     )
     
     # the label that represents no entity type (i.e. 'O')
-    NON_ENTITY_LABEL = len(wifine.FIGER_VOCAB)
+    NONENTITY_LABEL = len(wifine.FIGER_VOCAB)
 
     # get train dataset
     train_document_ids = get_document_ids_to_train_with(num=1)
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     logging.debug(f'valid_document_ids = {valid_document_ids}')
 
     # learning setup
-    opt = torch.optim.Adam(model.parameters(), lr=1e-4)
+    opt = torch.optim.Adam(model.parameters(), lr=1e-5)
     logging.debug(f'opt = {opt}')
 
     NUM_EPOCHS = 10
@@ -90,7 +90,7 @@ if __name__ == '__main__':
                 tokenizer,
                 tokens,
                 entity_spans_to_labels=figer_types,
-                non_entity_label=NON_ENTITY_LABEL,
+                nonentity_label=NONENTITY_LABEL,
                 stats=stats
             )
 
@@ -115,7 +115,7 @@ if __name__ == '__main__':
                 tokenizer,
                 tokens,
                 entity_spans_to_labels=figer_types,
-                non_entity_label=NON_ENTITY_LABEL
+                nonentity_label=NONENTITY_LABEL
             )
 
             correct += doc_correct
