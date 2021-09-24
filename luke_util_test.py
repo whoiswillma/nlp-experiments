@@ -1,8 +1,29 @@
 import unittest
-from luke_util import take_closure_over_entity_spans_to_labels
+from luke_util import take_closure_over_entity_spans_to_labels, chunked
 
 
 class LukeUtilTest(unittest.TestCase):
+
+    def test_chunked(self):
+        self.assertEqual(
+            chunked('ABCDEFG', 3),
+            ['ABC', 'DEF', 'G']
+        )
+
+        self.assertEqual(
+            chunked('ABCDEF', 3),
+            ['ABC', 'DEF']
+        )
+
+        self.assertEqual(
+            chunked([], 1),
+            []
+        )
+
+        self.assertEqual(
+            chunked('A', 3),
+            ['A']
+        )
 
     def test_take_closure_over_entity_spans_to_labels_1(self):
         entity_spans = {
