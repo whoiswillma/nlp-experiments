@@ -55,7 +55,7 @@ def get_entity_token_idx_to_figer_type(doc):
 
 def main():
     util.init_logging()
-    # util.pytorch_set_num_threads(4)
+    util.pytorch_set_num_threads(1)
 
     # make luke model and tokenizer
     model, tokenizer = luke_util.make_model_and_tokenizer(
@@ -66,7 +66,7 @@ def main():
     NONENTITY_LABEL = len(wifine.FIGER_VOCAB)
 
     # get train dataset
-    train_document_ids = get_document_ids_to_train_with(num=100)[5:]
+    train_document_ids = get_document_ids_to_train_with(num=100)
     valid_document_ids = train_document_ids  # for testing purposes
     logging.debug(f'train_document_ids = {train_document_ids}')
     logging.debug(f'valid_document_ids = {valid_document_ids}')
@@ -92,17 +92,38 @@ def main():
             # TODO: how should we incorporate multiple figer types into pretraining?
             figer_types = {k: v[0] for k, v in figer_types.items()}
 
-            luke_util.train_luke_model(
-                model,
-                tokenizer,
-                tokens,
-                entity_spans_to_labels=figer_types,
-                nonentity_label=NONENTITY_LABEL,
-                stats=stats,
-                nonentity_choose_k='all'
-            )
+            did_backprop=False
+            try:
+                luke_util.train_luke_model(
+                    model,
+                    tokenizer,
+                    tokens,
+                    entity_spans_to_labels=figer_types,
+                    nonentity_label=NONENTITY_LABEL,
+                    stats=stats
+                )
+                did_backprop = True
+            except ValueError:
+                logging.debug(f'Document {doc_id} is too long. Trying again with'
+                              + ' nonentity_choose_k=\'num_entity_spans\'')
 
-            opt.step()
+            try:
+                if not did_backprop:
+                    luke_util.train_luke_model(
+                        model,
+                        tokenizer,
+                        tokens,
+                        entity_spans_to_labels=figer_types,
+                        nonentity_label=NONENTITY_LABEL,
+                        stats=stats,
+                        nonentity_choose_k='num_entity_spans'
+                    )
+                    did_backprop = True
+            except ValueError:
+                logging.debug(f'Document {doc_id} is too long. Skipping')
+
+            if did_backprop:
+                opt.step()
 
         logging.info(f'stats = {stats}')
         # util.save_checkpoint(model, opt, epoch)

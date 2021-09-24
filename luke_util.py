@@ -5,6 +5,8 @@ from typing import Collection, Optional, Union
 import torch
 from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
 
+import util
+
 
 def chunked(collection: Collection, n: int) -> Collection:
     l = len(collection)
@@ -194,25 +196,23 @@ def train_luke_model(
     )
     text = ' '.join(tokens)
 
-    n = 32
-    chunked_char_spans = chunked(all_char_spans, n)
-    chunked_labels = chunked(labels, n)
-    assert len(chunked_char_spans) == len(chunked_labels)
+    inputs = tokenizer(
+        text,
+        entity_spans=all_char_spans,
+        return_tensors='pt',
+        return_length=True
+    )
 
-    for char_spans_chunk, labels_chunk in zip(chunked_char_spans, chunked_labels):
-        assert len(char_spans_chunk) == len(labels_chunk)
+    # TODO: how to determine max length from luke model / tokenizer?
+    if inputs.length > 512:
+        raise ValueError(f'Input is too long: inputs.length={inputs.length}')
+    del inputs['length']
 
-        inputs = tokenizer(
-            text,
-            entity_spans=char_spans_chunk,
-            return_tensors='pt',
-            truncation=True
-        )
-        outputs = model(**inputs, labels=torch.tensor(labels_chunk).unsqueeze(0))
-        outputs.loss.backward()
+    outputs = model(**inputs, labels=torch.tensor(labels).unsqueeze(0))
+    outputs.loss.backward()
 
-        stats['loss'] += outputs.loss.item()
-        stats['num_spans'] += len(labels_chunk)
+    stats['loss'] += outputs.loss.item()
+    stats['num_spans'] += len(labels)
 
 
 def test_luke_model_on_entity_spans(
