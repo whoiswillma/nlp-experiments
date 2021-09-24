@@ -1,9 +1,14 @@
 import logging
 import random
-from typing import Collection, Optional
+from typing import Collection, Optional, Union
 
 import torch
 from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
+
+
+def chunked(collection: Collection, n: int) -> Collection:
+    l = len(collection)
+    return [collection[i: min(i + n, l)] for i in range(0, l, n)]
 
 
 def get_word_start_end_positions(tokens: list[str]) -> tuple[list[int], list[int]]:
@@ -28,6 +33,9 @@ def take_closure_over_entity_spans_to_labels(
     entity span (i, j) and associated label l, all sub spans (i', j') such that
     i <= i' < j' <= j is associated with l in its closure.
     """
+
+    if not entity_spans_to_labels:
+        return {}
 
     idx_to_label: list[Optional[int]] = [None] * max(end for _, end in entity_spans_to_labels)
     for entity_span, label in entity_spans_to_labels.items():
@@ -159,92 +167,52 @@ def make_train_stats_dict():
     }
 
 
-def train_luke_model_on_entity_spans(
-        model,
-        tokenizer,
-        tokens: list[str],
-        entity_spans_to_labels: dict[tuple[int, int], int],
-        stats: dict[str, any]
-):
-    model.train()
-
-    entity_char_spans, labels = get_entity_char_spans_and_labels(tokens, entity_spans_to_labels)
-    text = ' '.join(tokens)
-
-    inputs = tokenizer(
-        text,
-        entity_spans=entity_char_spans,
-        return_tensors='pt'
-    )
-    outputs = model(**inputs, labels=torch.tensor(labels).unsqueeze(0))
-    outputs.loss.backward()
-
-    stats['loss'] += outputs.loss.item()
-    stats['num_spans'] += len(entity_char_spans)
-
-
-def train_luke_model_on_non_entity_spans(
-        model,
-        tokenizer,
-        tokens: list[str],
-        entity_spans: Collection[tuple[int, int]],
-        non_entity_label: int,
-        stats: dict[str, any],
-        choose_k: Optional[int] = None,
-        max_span_len: Optional[int] = 16
-):
-    model.train()
-
-    text = ' '.join(tokens)
-
-    non_entity_char_spans = get_nonentity_char_spans(
-        tokens,
-        entity_spans,
-        max_span_len=max_span_len,
-        choose_k=choose_k
-    )
-
-    inputs = tokenizer(
-        text,
-        entity_spans=non_entity_char_spans,
-        return_tensors='pt'
-    )
-    outputs = model(**inputs, labels=torch.full((1, len(non_entity_char_spans)), non_entity_label))
-    outputs.loss.backward()
-
-    stats['loss'] += outputs.loss.item()
-    stats['num_spans'] += len(non_entity_char_spans)
-
-
 def train_luke_model(
         model,
         tokenizer,
         tokens: list[str],
         entity_spans_to_labels: dict[tuple[int, int], int],
         nonentity_label: int,
-        stats: dict[str, any]
+        stats: dict[str, any],
+        nonentity_choose_k: Union[int, str] = 'all'
 ):
 
     model.train()
+
+    if nonentity_choose_k == 'num_entity_spans':
+        nonentity_choose_k = len(entity_spans_to_labels)
+    elif nonentity_choose_k == 'all':
+        nonentity_choose_k = None
+
+    assert nonentity_choose_k is None or type(nonentity_choose_k) is int
 
     all_char_spans, labels = get_entity_and_nonentity_char_spans_and_labels(
         tokens,
         entity_spans_to_labels,
         nonentity_label,
-        nonentity_choose_k=len(entity_spans_to_labels)
+        nonentity_choose_k=nonentity_choose_k
     )
     text = ' '.join(tokens)
 
-    inputs = tokenizer(
-        text,
-        entity_spans=all_char_spans,
-        return_tensors='pt'
-    )
-    outputs = model(**inputs, labels=torch.tensor(labels).unsqueeze(0))
-    outputs.loss.backward()
+    n = 32
+    chunked_char_spans = chunked(all_char_spans, n)
+    chunked_labels = chunked(labels, n)
+    assert len(chunked_char_spans) == len(chunked_labels)
 
-    stats['loss'] += outputs.loss.item()
-    stats['num_spans'] += len(labels)
+    for char_spans_chunk, labels_chunk in zip(chunked_char_spans, chunked_labels):
+        assert len(char_spans_chunk) == len(labels_chunk)
+
+        inputs = tokenizer(
+            text,
+            entity_spans=char_spans_chunk,
+            return_tensors='pt',
+            truncation=True
+        )
+        outputs = model(**inputs, labels=torch.tensor(labels_chunk).unsqueeze(0))
+        outputs.loss.backward()
+
+        stats['loss'] += outputs.loss.item()
+        stats['num_spans'] += len(labels_chunk)
 
 
 def test_luke_model_on_entity_spans(
@@ -275,7 +243,8 @@ def test_luke_model_on_entity_spans(
     inputs = tokenizer(
         text,
         entity_spans=entity_char_spans,
-        return_tensors='pt'
+        return_tensors='pt',
+        truncation=True
     )
 
     outputs = model(**inputs)

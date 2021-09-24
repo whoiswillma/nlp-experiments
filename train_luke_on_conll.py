@@ -45,7 +45,7 @@ def get_entity_spans_to_label(labels: list[int]):
     return entity_spans_to_label
 
 
-if __name__ == '__main__':
+def main():
     util.init_logging()
     util.pytorch_set_num_threads(1)
 
@@ -82,3 +82,10 @@ if __name__ == '__main__':
         logging.info(f'stats = {stats}')
         util.save_checkpoint(model, opt, epoch)
 
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        logging.warning(e)
+        raise e

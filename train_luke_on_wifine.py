@@ -1,4 +1,5 @@
 import logging
+import time
 
 import torch
 
@@ -30,37 +31,43 @@ def get_sentence_offsets(doc):
 def get_entity_token_span_to_figer_types(doc):
     sent_offs = get_sentence_offsets(doc)
     fe = doc.fine_entities()
-    return {
-        (sent_offs[s] + i, sent_offs[s] + j): t
-        for i, j, t, s in zip(fe.begin, fe.end, fe.figer_types, fe.sent_idx)
-    }
+    if fe:
+        return {
+            (sent_offs[s] + i, sent_offs[s] + j): t
+            for i, j, t, s in zip(fe.begin, fe.end, fe.figer_types, fe.sent_idx)
+        }
+    else:
+        return {}
 
 
 def get_entity_token_idx_to_figer_type(doc):
     sent_offs = get_sentence_offsets(doc)
     fe = doc.fine_entities()
-    return {
-        sent_offs[s] + i: t[0]
-        for start, end, t, s in zip(fe.begin, fe.end, fe.figer_types, fe.sent_idx)
-        for i in range(start, end)
-    }
+    if fe:
+        return {
+            sent_offs[s] + i: t[0]
+            for start, end, t, s in zip(fe.begin, fe.end, fe.figer_types, fe.sent_idx)
+            for i in range(start, end)
+        }
+    else:
+        return {}
 
 
-if __name__ == '__main__':
+def main():
     util.init_logging()
-    # util.pytorch_set_num_threads(1)
+    # util.pytorch_set_num_threads(4)
 
     # make luke model and tokenizer
     model, tokenizer = luke_util.make_model_and_tokenizer(
         num_labels=len(wifine.FIGER_VOCAB) + 1
     )
-    
+
     # the label that represents no entity type (i.e. 'O')
     NONENTITY_LABEL = len(wifine.FIGER_VOCAB)
 
     # get train dataset
-    train_document_ids = get_document_ids_to_train_with(num=1)
-    valid_document_ids = train_document_ids # for testing purposes
+    train_document_ids = get_document_ids_to_train_with(num=100)[5:]
+    valid_document_ids = train_document_ids  # for testing purposes
     logging.debug(f'train_document_ids = {train_document_ids}')
     logging.debug(f'valid_document_ids = {valid_document_ids}')
 
@@ -91,7 +98,8 @@ if __name__ == '__main__':
                 tokens,
                 entity_spans_to_labels=figer_types,
                 nonentity_label=NONENTITY_LABEL,
-                stats=stats
+                stats=stats,
+                nonentity_choose_k='all'
             )
 
             opt.step()
@@ -127,4 +135,12 @@ if __name__ == '__main__':
 
     # checkpoint_name = util.save_checkpoint(model, opt, NUM_EPOCHS)
     # logging.info(f'Saved checkpoint {checkpoint_name}')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        logging.warning(e)
+        raise e
 
