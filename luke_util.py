@@ -275,7 +275,7 @@ def acid_test_luke_model(
 
     assert len(labels) == len(predictions)
 
-    logging.debug(f'labels = {labels}, predictions = {predictions}')
+    # logging.debug(f'labels = {labels}, predictions = {predictions}')
 
     correct = sum([1 for pred, label in zip(labels, predictions) if pred == label])
     total = len(labels)

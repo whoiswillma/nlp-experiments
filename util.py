@@ -19,6 +19,7 @@ def init_logging():
         level=logging.DEBUG
     )
     os.system(f'open {log_filename}')
+    print(f'Logging to {log_filename}')
 
 
 def pytorch_set_num_threads(num_threads):

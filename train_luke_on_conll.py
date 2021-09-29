@@ -46,7 +46,7 @@ def get_entity_spans_to_label(labels: list[int]):
 
 def main():
     util.init_logging()
-    util.pytorch_set_num_threads(1)
+    # util.pytorch_set_num_threads(1)
 
     model, tokenizer = luke_util.make_model_and_tokenizer(5)
 
@@ -55,7 +55,7 @@ def main():
     # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
 
-    NUM_EPOCHS = 1
+    NUM_EPOCHS = 3
 
     # lr from LUKE paper
     opt = torch.optim.Adam(model.parameters(), lr=1e-5)
@@ -64,7 +64,7 @@ def main():
     for epoch in util.mytqdm(range(NUM_EPOCHS)):
         stats = luke_util.make_train_stats_dict()
 
-        for example in util.mytqdm(CONLL_TRAIN):
+        for example in util.mytqdm(CONLL_TRAIN, desc='train'):
             opt.zero_grad()
             entity_spans_to_labels = get_entity_spans_to_label(example['labels'])
 
@@ -80,6 +80,28 @@ def main():
 
         logging.info(f'stats = {stats}')
         util.save_checkpoint(model, opt, epoch)
+
+        # validate
+        correct = 0
+        total = 0
+
+        for example in util.mytqdm(CONLL_TRAIN, desc='validate'):
+            entity_spans_to_labels = get_entity_spans_to_label(example['labels'])
+
+            doc_correct, doc_total = luke_util.acid_test_luke_model(
+                model,
+                tokenizer,
+                example['tokens'],
+                entity_spans_to_labels=entity_spans_to_labels,
+                nonentity_label=0
+            )
+
+            correct += doc_correct
+            total += doc_total
+
+        logging.info('Validation')
+        logging.info(f'num_correct = {correct}')
+        logging.info(f'total_predictions = {total}')
 
 
 if __name__ == '__main__':
