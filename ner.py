@@ -1,6 +1,26 @@
-from typing import List, Tuple
+from typing import TypeVar
 
-def extract_nets(tokens: List[str], tags: List[str]) -> List[Tuple[str, str]]:
+T = TypeVar('T')
+
+def extract_nets_from_chunks(tokens: list[str], labels: list[T], null_label: T) -> list[tuple[str, T]]:
+    named_entity_and_type: list[tuple[str, T]] = []
+
+    current_named_entity = []
+    current_label = null_label
+
+    for token, label in list(zip(tokens, labels)) + [('', null_label)]:
+        if current_label != label:
+            if current_label != null_label:
+                named_entity_and_type.append((' '.join(current_named_entity), current_label))
+            current_named_entity = []
+
+        current_label = label
+        current_named_entity.append(token)
+
+    return named_entity_and_type
+
+
+def extract_nets_from_bio(tokens: list[str], tags: list[str]) -> list[tuple[str, str]]:
     """Extract named entity and types (nets) from tokens, tags in BIO format
     """
 
