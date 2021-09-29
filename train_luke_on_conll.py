@@ -2,7 +2,6 @@ import logging
 
 import datasets
 import torch
-from tqdm import tqdm
 
 import luke_util
 import util

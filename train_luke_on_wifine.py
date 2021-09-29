@@ -103,12 +103,13 @@ def main():
                     stats=stats
                 )
                 did_backprop = True
+
             except ValueError:
                 logging.debug(f'Document {doc_id} is too long. Trying again with'
                               + ' nonentity_choose_k=\'num_entity_spans\'')
 
-            try:
-                if not did_backprop:
+            if not did_backprop:
+                try:
                     luke_util.train_luke_model(
                         model,
                         tokenizer,
@@ -119,8 +120,9 @@ def main():
                         nonentity_choose_k='num_entity_spans'
                     )
                     did_backprop = True
-            except ValueError:
-                logging.debug(f'Document {doc_id} is too long. Skipping')
+
+                except ValueError:
+                    logging.debug(f'Document {doc_id} is too long. Skipping')
 
             if did_backprop:
                 opt.step()
