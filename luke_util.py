@@ -5,8 +5,6 @@ from typing import Collection, Optional, Union
 import torch
 from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
 
-import util
-
 
 def chunked(collection: Collection, n: int) -> Collection:
     l = len(collection)
@@ -114,7 +112,8 @@ def get_nonentity_char_spans(
             if (start_token_idx, end_token_idx) not in entity_spans:
                 non_entity_char_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
 
-    if choose_k:
+    if choose_k is not None:
+        assert choose_k > 0
         non_entity_char_spans = random.choices(non_entity_char_spans, k=choose_k)
 
     return non_entity_char_spans
@@ -236,7 +235,8 @@ def test_luke_model_on_entity_spans(
         entity_char_spans = entity_spans
 
     else:
-        assert False
+        raise ValueError(f'Expected entity_span_level to be either "token" or "char". '
+                         f'Got {entity_span_level} instead.')
 
     text = ' '.join(tokens)
 
@@ -244,11 +244,23 @@ def test_luke_model_on_entity_spans(
         text,
         entity_spans=entity_char_spans,
         return_tensors='pt',
-        truncation=True
+        return_length = True
     )
 
+    # TODO: how to determine max length from luke model / tokenizer?
+    if inputs.length > 512:
+        raise ValueError(f'Input is too long: inputs.length={inputs.length}')
+    del inputs['length']
+
     outputs = model(**inputs)
-    return outputs.logits.argmax(-1).squeeze().tolist()
+    result = outputs.logits.argmax(-1).squeeze().tolist()
+
+    if isinstance(result, list):
+        return result
+    else:
+        # if the tensor contains a single element, tolist() returns a scalar
+        assert isinstance(result, int)
+        return [result]
 
 
 def acid_test_luke_model(
@@ -262,8 +274,10 @@ def acid_test_luke_model(
         tokens,
         entity_spans_to_labels,
         nonentity_label,
-        nonentity_choose_k=len(entity_spans_to_labels)
+        nonentity_choose_k=max(len(tokens) // 2, len(entity_spans_to_labels))
     )
+
+    assert len(all_char_spans) == len(labels)
 
     predictions = test_luke_model_on_entity_spans(
         model,
@@ -273,9 +287,8 @@ def acid_test_luke_model(
         entity_span_level='char'
     )
 
+    logging.debug(f'labels = {labels}, predictions = {predictions}')
     assert len(labels) == len(predictions)
-
-    # logging.debug(f'labels = {labels}, predictions = {predictions}')
 
     correct = sum([1 for pred, label in zip(labels, predictions) if pred == label])
     total = len(labels)
