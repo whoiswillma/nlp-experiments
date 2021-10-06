@@ -1,5 +1,4 @@
 import logging
-
 import datasets
 from transformers import get_scheduler
 import torch
@@ -51,15 +50,8 @@ def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16,
                 outputs = model(**batch)
                 # the outputs are of shape (loss, logits)
                 loss = outputs[0]
-                # with the .backward method it calculates all
-                # of  the gradients used for autograd
-
                 loss.backward()
 
-                # NOTE: if we append `loss` (a tensor) we will force the GPU to save
-                # the loss into its memory, potentially filling it up. To avoid this
-                # we rather store its float value, which can be accessed through the
-                # `.item` method
                 current_loss += loss.item()
                 if i % 4 == 0 and i > 0:
                     # update the model using the optimizer
@@ -73,7 +65,7 @@ def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16,
 
         # SAVING CHECKPOINTS!!!
         print("saving...")
-        if not epoch < num_skips:
+        if epoch >= num_skips:
             # update the model one last time for this epoch
             optimizer.step()
             optimizer.zero_grad()
