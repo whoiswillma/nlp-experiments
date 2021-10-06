@@ -1,3 +1,5 @@
+import numpy as np
+
 CONLL_TO_LABEL_MAP = {
     0: 0,
     1: 1,
@@ -9,6 +11,14 @@ CONLL_TO_LABEL_MAP = {
     7: 4,
     8: 4
 }
+
+
+def downsample(dataset, percent):
+    num_examples = len(dataset)
+    indicies = np.arange(num_examples)
+    np.random.shuffle(indicies)
+    indicies = indicies[:num_examples*percent//100]
+    return dataset.select(indicies)
 
 
 def get_label_mappings(dataset):

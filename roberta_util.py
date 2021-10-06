@@ -4,7 +4,7 @@ import random
 
 import torch
 from transformers import RobertaForTokenClassification, RobertaTokenizer
-import conll_util
+
 
 ROBERTA_VERSION = 'roberta-large'
 
