@@ -11,6 +11,7 @@ import util
 
 TRAIN_LOSS = []
 DEVICE = None
+SAVE_PATH = 'checkpoints'
 
 
 def map_to_int_labels(example):
@@ -33,11 +34,13 @@ def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16,
 
     num_skips = 0
 
+    print("Beginning Training:")
     # iterate through the data 'n_epochs' times
-    for epoch in util.mytqdmn(range(n_epochs)):
+    for epoch in util.mytqdm(range(n_epochs)):
+        print("Epoch: ", epoch + 1)
         current_loss = 0
         # iterate through each batch of the train data
-        for i, batch in enumerate(util.mytqdmn(train_data)):
+        for i, batch in enumerate(util.mytqdm(train_data)):
 
             if epoch < num_skips:
                 lr_scheduler.step()
@@ -69,13 +72,15 @@ def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16,
                     current_loss = 0
 
         # SAVING CHECKPOINTS!!!
-        # if not epoch < num_skips:
-        #     # update the model one last time for this epoch
-        #     optimizer.step()
-        #     optimizer.zero_grad()
-        #     path = save_path + "/" + str(epoch + 1) + "e"
-        #     model.save_pretrained(path)
-        #     print("Saving checkpoint at epoch: ", epoch + 1)
+        print("saving...")
+        if not epoch < num_skips:
+            # update the model one last time for this epoch
+            optimizer.step()
+            optimizer.zero_grad()
+            path = SAVE_PATH + "/" + str(epoch + 1) + "e"
+            print(path)
+            model.save_pretrained(path)
+            print("Saving checkpoint at epoch: ", epoch + 1)
 
 
 def main():
@@ -87,6 +92,8 @@ def main():
     CONLL_DATASET = conll_util.encode(
         datasets.load_dataset('conll2003'), tokenizer)
     CONLL_TRAIN = CONLL_DATASET['train']
+    CONLL_TRAIN_10 = conll_util.downsample(CONLL_TRAIN, 10)
+    CONLL_TRAIN_1 = conll_util.downsample(CONLL_TRAIN, 1)
     # CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels)
     # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
@@ -104,8 +111,8 @@ def main():
     optimizer = optim.AdamW(params=model.parameters(), lr=5e-5)
     logging.debug(f'opt = {optimizer}')
 
-    train_data = torch.utils.data.DataLoader(CONLL_TRAIN, batch_size=4)
-    do_training(model, 10, train_data, optimizer)
+    train_data = torch.utils.data.DataLoader(CONLL_TRAIN_1, batch_size=4)
+    do_training(model, 1, train_data, optimizer)
 
     #     logging.info('Validation')
     #     logging.info(f'num_correct = {correct}')
