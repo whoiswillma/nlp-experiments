@@ -1,6 +1,6 @@
 import logging
-import random
 
+import allennlp.modules.conditional_random_field as crf
 import datasets
 import torch
 
@@ -10,10 +10,8 @@ from bilstm_crf_util import (
     BiLstmCrfModel,
     make_stats,
     backprop,
-    make_inputs, print_eval
+    make_inputs
 )
-
-import allennlp.modules.conditional_random_field as crf
 
 
 def main():
@@ -55,9 +53,12 @@ def main():
 
         stats = make_stats()
 
-        for batch_idx in util.mytqdm(range(0, len(train_dataset), batch_size)):
+        for batch_idx in util.mytqdm(range(0, len(train_dataset) // batch_size)):
             opt.zero_grad()
-            examples = train_dataset.select(range(batch_idx, batch_idx + batch_size))
+            examples = train_dataset.select(range(
+                batch_size * batch_idx,
+                batch_size * (batch_idx + 1)
+            ))
             backprop(
                 model,
                 [example['tokens'] for example in examples],
