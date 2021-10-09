@@ -1,5 +1,6 @@
+import logging
 from collections import defaultdict
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Tuple, Union, Callable
 
 import allennlp.modules.conditional_random_field as crf
 import torch
@@ -19,6 +20,8 @@ class BiLstmCrfModel(nn.Module):
             embeddings: Optional[torch.Tensor] = None,
             freeze_embeddings: Optional[bool] = False,
             lstm_hidden_dim: int = 300,
+            lstm_num_layers: int = 1,
+            dropout: float = 0.2,
             crf_constraints: Optional[List[Tuple[int, int]]] = None
     ):
         super(BiLstmCrfModel, self).__init__()
@@ -43,7 +46,13 @@ class BiLstmCrfModel(nn.Module):
             input_size=embedding_dim,
             hidden_size=lstm_hidden_dim // 2,
             batch_first=True,
-            bidirectional=True
+            bidirectional=True,
+            num_layers=lstm_num_layers,
+            dropout=dropout
+        )
+
+        self._dropout = nn.Dropout(
+            p=dropout
         )
 
         self._linear = nn.Linear(
@@ -83,15 +92,18 @@ class BiLstmCrfModel(nn.Module):
             total_length=total_length
         )
 
+        output = self._dropout(output)
+
         output = self._linear(output)
 
-        output = F.softmax(output, output.dim() - 1)
+        output = F.log_softmax(output, output.dim() - 1)
 
         result_dict = {}
         max_len = seq_lens.max().item()
         mask = torch.arange(max_len).expand(len(seq_lens), max_len) < seq_lens.unsqueeze(1)
 
         if labels != None:
+            # crf.forward computes log likelihood, so we need to negate it
             result_dict['loss'] = -self._crf(
                 inputs=output,
                 tags=labels,
@@ -107,14 +119,14 @@ class BiLstmCrfModel(nn.Module):
         return result_dict
 
 
-def generate_token_to_idx_dict(dataset) -> defaultdict[str, int]:
+def generate_token_to_idx_dict(dataset: list[list[str]]) -> defaultdict[str, int]:
     """
     Unknown words are mapped to the zero index.
     """
 
     vocab = set()
-    for example in dataset:
-        for token in example['tokens']:
+    for tokens in dataset:
+        for token in tokens:
             vocab.add(token)
 
     result = defaultdict(int)
@@ -125,27 +137,30 @@ def generate_token_to_idx_dict(dataset) -> defaultdict[str, int]:
 
 
 def make_inputs(
-        examples: Union[list, Dataset],
+        dataset_tokens: list[list[str]],
+        dataset_ner_tags: list[list[int]],
         token_to_idx: dict[str, int],
         compute_loss: bool = False,
         decode_tags: bool = False
 ) -> dict[str, any]:
+
+    assert len(dataset_tokens) == len(dataset_ner_tags)
 
     def map_tokens_to_tensor(tokens: list[str]) -> torch.LongTensor:
         return torch.LongTensor([token_to_idx[token] for token in tokens])
 
     result = {
         'token_ids': rnn.pad_sequence(
-            [map_tokens_to_tensor(example['tokens']) for example in examples],
+            [map_tokens_to_tensor(tokens) for tokens in dataset_tokens],
             batch_first=True,
             padding_value=0
         ),
-        'seq_lens': torch.tensor([len(example['tokens']) for example in examples])
+        'seq_lens': torch.tensor([len(tokens) for tokens in dataset_tokens])
     }
 
     if compute_loss:
         result['labels'] = rnn.pad_sequence(
-            [torch.tensor(example['ner_tags']) for example in examples],
+            [torch.tensor(ner_tags) for ner_tags in dataset_ner_tags],
             batch_first=True,
             padding_value=0
         )
@@ -164,16 +179,52 @@ def make_stats():
 
 def backprop(
         model,
-        examples: Union[list, Dataset],
+        dataset_tokens: list[list[str]],
+        dataset_ner_tags: list[list[int]],
         token_to_idx: dict[str, int],
         stats: dict[str, any]
 ):
     model.train()
 
-    inputs = make_inputs(examples, token_to_idx, compute_loss=True)
+    inputs = make_inputs(
+        dataset_tokens,
+        dataset_ner_tags,
+        token_to_idx,
+        compute_loss=True
+    )
     output = model(**inputs)
     loss = output['loss']
     loss.backward()
 
     stats['loss'] += loss.item()
-    stats['num_examples'] += len(examples)
+    stats['num_examples'] += len(dataset_tokens)
+
+
+def print_eval(
+        model,
+        tokens: list[str],
+        token_to_idx: dict[str, int],
+        ner_tags: list[int],
+        ner_tag_to_desc: Optional[dict[int, str]] = None,
+        print_fn: Callable[[str], None] = print,
+):
+    model.eval()
+
+    inputs = make_inputs(
+        [tokens],
+        [ner_tags],
+        token_to_idx,
+        decode_tags=True
+    )
+    viterbi_decode = model(**inputs)['tags']
+    predictions = viterbi_decode[0][0]
+    assert len(predictions) == len(ner_tags)
+
+    if ner_tag_to_desc is None:
+        ner_tag_to_desc = defaultdict(lambda x: str(x))
+
+    print_fn('')
+    print_fn(f'{"Tokens":<20} {"Pred":<7} {"Actual":<7}')
+    for token, prediction, actual in zip(tokens, predictions, ner_tags):
+        print_fn(f'{token:<20} {ner_tag_to_desc[prediction]:<7} {ner_tag_to_desc[actual]:<7}')
+    print_fn('')

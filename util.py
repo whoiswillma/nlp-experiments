@@ -7,11 +7,13 @@ from tqdm import tqdm
 
 
 def mytqdm(*args, **kwargs):
+    if 'disable' in kwargs and kwargs['disable']:
+        return args[0]
     return tqdm(*args, ncols=70, leave=False, **kwargs)
 
 
 def init_logging(log_to_file=True, open_console=True):
-    # assert open_console => log_to_file
+    # this asserts that open_console implies log_to_file
     assert not log_to_file or open_console
 
     datetime_str = get_datetime_str()
