@@ -22,16 +22,21 @@ def main():
     CONLL_VALID = datasets.load_dataset('conll2003')['validation']
     ner_feature = CONLL_TRAIN.features['ner_tags'].feature
 
+    embedding_dim = 100
     constraints = crf.allowed_transitions(
         'BIO',
         {i: tag for i, tag in enumerate(ner_feature.names) }
     )
-    embeddings, token_to_idx = glove_util.load_embeddings_tensor_and_token_to_idx_dict()
+    embeddings, token_to_idx = glove_util.load_embeddings_tensor_and_token_to_idx_dict(
+        dim=embedding_dim
+    )
     model = BiLstmCrfModel(
         vocab_size=len(token_to_idx) + 1, # plus one for unk
         num_tags=ner_feature.num_classes,
+        embedding_dim=embedding_dim,
         embeddings=embeddings,
-        crf_constraints=constraints
+        crf_constraints=constraints,
+        lstm_hidden_dim=100
     )
     logging.info(model)
 

@@ -5,7 +5,11 @@ import torch
 import util
 
 
-def load_glove_embeddings(dim: int = 300) -> dict[str, torch.Tensor]:
+# to add glove embeddings, download glove.6B.zip from
+# https://nlp.stanford.edu/projects/glove/ and extract into the repo.
+
+
+def load_glove_embeddings(dim: int) -> dict[str, torch.Tensor]:
     embeddings = {}
 
     with open(f'glove.6B/glove.6B.{dim}d.txt', 'rt') as f:
@@ -19,7 +23,7 @@ def load_glove_embeddings(dim: int = 300) -> dict[str, torch.Tensor]:
 
 
 def load_embeddings_tensor_and_token_to_idx_dict(
-        dim: int = 300
+        dim: int
 ) -> Tuple[torch.Tensor, dict[str, int]]:
 
     embeddings = load_glove_embeddings(dim)
