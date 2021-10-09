@@ -1,7 +1,7 @@
 import logging
 
 import datasets
-from tqdm import tqdm
+import allennlp.modules.conditional_random_field as crf
 
 import util
 from bilstm_crf_util import *
@@ -15,18 +15,22 @@ def main():
     token_to_idx: dict[str, int] = generate_token_to_idx_dict(CONLL_TRAIN)
     ner_feature = CONLL_TRAIN.features['ner_tags'].feature
 
+    constraints = crf.allowed_transitions(
+        'BIO',
+        {i: tag for i, tag in enumerate(ner_feature.names) }
+    )
     model = BiLstmCrfModel(
         vocab_size=len(token_to_idx) + 1, # plus one for unk
-        num_tags=ner_feature.num_classes
+        num_tags=ner_feature.num_classes,
+        crf_constraints=constraints
     )
     logging.info(model)
 
-    # learning rate from: https://arxiv.org/pdf/1508.01991.pdf
-    opt = torch.optim.Adam(model.parameters(), lr=0.1)
+    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
     logging.info(opt)
 
-    num_epochs = 5
-    batch_size = 4
+    num_epochs = 20
+    batch_size = 16
 
     for _ in util.mytqdm(range(num_epochs), desc='epoch'):
         stats = make_stats()
@@ -39,17 +43,18 @@ def main():
 
         logging.info(stats)
 
-    model.eval()
-    num_correct = 0
-    total = 0
-    for example in CONLL_VALID:
-        inputs = make_inputs([example], token_to_idx, decode_tags=True)
-        viterbi_decode = model(**inputs)['tags']
-        predictions = viterbi_decode[0][0]
-        num_correct += sum(1 for p, a in zip(predictions, example['ner_tags']) if p == a)
-        total += len(example['tokens'])
+        model.eval()
+        num_correct = 0
+        total = 0
 
-    logging.info(f'num_correct={num_correct}, total={total}')
+        for example in util.mytqdm(CONLL_VALID, desc='valid'):
+            inputs = make_inputs([example], token_to_idx, decode_tags=True)
+            viterbi_decode = model(**inputs)['tags']
+            predictions = viterbi_decode[0][0]
+            num_correct += sum(1 for p, a in zip(predictions, example['ner_tags']) if p == a)
+            total += len(example['tokens'])
+
+        logging.info(f'acid test num_correct={num_correct}, total={total}')
 
     util.save_checkpoint(model, opt, num_epochs)
 
