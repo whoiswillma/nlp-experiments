@@ -1,11 +1,11 @@
 from collections import defaultdict
-from typing import Optional, List, Tuple, Collection, Union
+from typing import Optional, List, Tuple, Union
 
+import allennlp.modules.conditional_random_field as crf
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.rnn as rnn
-import allennlp.modules.conditional_random_field as crf
 from datasets import Dataset
 
 
@@ -15,18 +15,29 @@ class BiLstmCrfModel(nn.Module):
             self,
             vocab_size: int,
             num_tags: int,
-            embedding_dim: int = 128,
-            lstm_hidden_dim: int = 128,
+            embedding_dim: int = 300,
+            embeddings: Optional[torch.Tensor] = None,
+            freeze_embeddings: Optional[bool] = False,
+            lstm_hidden_dim: int = 300,
             crf_constraints: Optional[List[Tuple[int, int]]] = None
     ):
         super(BiLstmCrfModel, self).__init__()
 
         assert lstm_hidden_dim % 2 == 0
 
-        self._embedding = nn.Embedding(
-            num_embeddings=vocab_size,
-            embedding_dim=embedding_dim
-        )
+        if embeddings != None:
+            assert embeddings.shape[1] == embedding_dim
+            self._embedding = nn.Embedding.from_pretrained(
+                embeddings=embeddings,
+                freeze=freeze_embeddings
+            )
+        else:
+            assert not freeze_embeddings
+            self._embedding = nn.Embedding(
+                num_embeddings=vocab_size,
+                embedding_dim=embedding_dim
+            )
+
 
         self._lstm = nn.LSTM(
             input_size=embedding_dim,

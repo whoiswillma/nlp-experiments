@@ -1,10 +1,18 @@
 import logging
 
 import datasets
-import allennlp.modules.conditional_random_field as crf
+import torch
 
+import glove_util
 import util
-from bilstm_crf_util import *
+from bilstm_crf_util import (
+    BiLstmCrfModel,
+    make_stats,
+    backprop,
+    make_inputs
+)
+
+import allennlp.modules.conditional_random_field as crf
 
 
 def main():
@@ -12,16 +20,17 @@ def main():
 
     CONLL_TRAIN = datasets.load_dataset('conll2003')['train']
     CONLL_VALID = datasets.load_dataset('conll2003')['validation']
-    token_to_idx: dict[str, int] = generate_token_to_idx_dict(CONLL_TRAIN)
     ner_feature = CONLL_TRAIN.features['ner_tags'].feature
 
     constraints = crf.allowed_transitions(
         'BIO',
         {i: tag for i, tag in enumerate(ner_feature.names) }
     )
+    embeddings, token_to_idx = glove_util.load_embeddings_tensor_and_token_to_idx_dict()
     model = BiLstmCrfModel(
         vocab_size=len(token_to_idx) + 1, # plus one for unk
         num_tags=ner_feature.num_classes,
+        embeddings=embeddings,
         crf_constraints=constraints
     )
     logging.info(model)
