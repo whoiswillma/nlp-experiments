@@ -22,7 +22,7 @@ def main():
     CONLL_VALID = datasets.load_dataset('conll2003')['validation']
     ner_feature = CONLL_TRAIN.features['ner_tags'].feature
 
-    embedding_dim = 50
+    embedding_dim = 100
     embeddings, token_to_idx = glove_util.load_embeddings_tensor_and_token_to_idx_dict(
         dim=embedding_dim
     )
@@ -35,20 +35,22 @@ def main():
         num_tags=ner_feature.num_classes,
         embedding_dim=embedding_dim,
         embeddings=embeddings,
-        lstm_hidden_dim=50,
+        freeze_embeddings=True,
+        lstm_hidden_dim=300,
         lstm_num_layers=1,
         dropout=0,
         crf_constraints=constraints,
     )
+    logging.info(f'Constraints {constraints}')
     logging.info(model)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    opt = torch.optim.SGD(model.parameters(), lr=1e-1)
     logging.info(opt)
 
-    num_epochs = 10
-    batch_size = 16
+    num_epochs = 50
+    batch_size = 100
 
-    for _ in util.mytqdm(range(num_epochs)):
+    for epoch in util.mytqdm(range(1, num_epochs + 1)):
         train_dataset = train_dataset.shuffle()
 
         stats = make_stats()
@@ -73,25 +75,32 @@ def main():
         model.eval()
         num_correct = 0
         total = 0
+        validation_loss = 0
 
         for example in util.mytqdm(CONLL_VALID):
             inputs = make_inputs(
                 [example['tokens']],
                 [example['ner_tags']],
                 token_to_idx,
-                decode_tags=True
+                decode_tags=True,
+                compute_loss=True
             )
 
             outputs = model(**inputs)
             viterbi_decode = outputs['tags']
+            validation_loss += outputs['loss'].item()
             predictions = viterbi_decode[0][0]
             assert len(predictions) == len(example['ner_tags'])
             num_correct += sum(1 for p, a in zip(predictions, example['ner_tags']) if p == a)
             total += len(example['tokens'])
 
+        logging.info(f'validation loss: {validation_loss}')
         logging.info(f'acid test num_correct={num_correct}, total={total}')
 
-    # util.save_checkpoint(model, opt, num_epochs)
+        if epoch % 10 == 0:
+            util.save_checkpoint(model, opt, epoch)
+
+    util.save_checkpoint(model, opt, epoch)
 
 
 if __name__ == '__main__':
