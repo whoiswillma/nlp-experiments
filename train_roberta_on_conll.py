@@ -13,12 +13,6 @@ DEVICE = None
 SAVE_PATH = 'checkpoints'
 
 
-def map_to_int_labels(example):
-    example['labels'] = [conll_util.CONLL_TO_LABEL_MAP[x]
-                         for x in example['ner_tags']]
-    return example
-
-
 def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16, warmup_ratio=0.1):
 
     grad_acc_steps = effective_batch_size // 4
@@ -81,14 +75,11 @@ def main():
 
     tokenizer = roberta_util.make_tokenizer()
 
-    CONLL_DATASET = conll_util.encode(
+    CONLL_DATASET = roberta_util.encode(
         datasets.load_dataset('conll2003'), tokenizer)
     CONLL_TRAIN = CONLL_DATASET['train']
     CONLL_TRAIN_10 = conll_util.downsample(CONLL_TRAIN, 10)
     CONLL_TRAIN_1 = conll_util.downsample(CONLL_TRAIN, 1)
-    # CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels)
-    # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
-    # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
 
     num_labels = conll_util.num_labels(CONLL_TRAIN)
     id2label, label2id = conll_util.get_label_mappings(CONLL_TRAIN)
