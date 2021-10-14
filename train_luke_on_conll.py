@@ -51,7 +51,7 @@ def main():
     model, tokenizer = luke_util.make_model_and_tokenizer(5)
 
     CONLL_DATASET = datasets.load_dataset('conll2003')
-    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels)
+    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels).select([0])
     # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
 
