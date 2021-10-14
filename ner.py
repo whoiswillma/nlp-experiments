@@ -133,12 +133,16 @@ class NERBinaryConfusionMatrix:
 
         return self.tp == other.tp and self.fn == other.fn and self.fp == other.fp
 
+    def __repr__(self):
+        return f'{{ tp: {self.tp}, fn: {self.fn}, fp: {self.fp} }}'
+
 
 def compute_binary_confusion_matrix_from_bio(
         pred_bio: list[str],
         gold_bio: list[str],
         accumulate: Optional[NERBinaryConfusionMatrix] = None
 ) -> NERBinaryConfusionMatrix:
+    assert len(pred_bio) == len(gold_bio)
 
     pred_ner_spans = extract_named_entity_spans_from_bio(pred_bio)
     gold_ner_spans = extract_named_entity_spans_from_bio(gold_bio)
