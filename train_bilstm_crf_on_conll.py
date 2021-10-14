@@ -12,6 +12,12 @@ from bilstm_crf_util import (
     backprop,
     make_inputs
 )
+import conll_util
+
+from ner import (
+    NERBinaryConfusionMatrix,
+    compute_binary_confusion_matrix_from_bio
+)
 
 
 def main():
@@ -21,8 +27,9 @@ def main():
     train_dataset = CONLL_TRAIN
     CONLL_VALID = datasets.load_dataset('conll2003')['validation']
     ner_feature = CONLL_TRAIN.features['ner_tags'].feature
+    label2id, id2label = conll_util.get_label_mappings(CONLL_TRAIN)
 
-    embedding_dim = 100
+    embedding_dim = 300
     embeddings, token_to_idx = glove_util.load_embeddings_tensor_and_token_to_idx_dict(
         dim=embedding_dim
     )
@@ -37,14 +44,14 @@ def main():
         embeddings=embeddings,
         freeze_embeddings=True,
         lstm_hidden_dim=300,
-        lstm_num_layers=1,
-        dropout=0,
+        lstm_num_layers=3,
+        dropout=0.2,
         crf_constraints=constraints,
     )
     logging.info(f'Constraints {constraints}')
     logging.info(model)
 
-    opt = torch.optim.SGD(model.parameters(), lr=1e-1)
+    opt = torch.optim.SGD(model.parameters(), lr=1e-3)
     logging.info(opt)
 
     num_epochs = 50
@@ -73,8 +80,7 @@ def main():
         logging.info(stats)
 
         model.eval()
-        num_correct = 0
-        total = 0
+        confusion_matrix = NERBinaryConfusionMatrix()
         validation_loss = 0
 
         for example in util.mytqdm(CONLL_VALID):
@@ -87,15 +93,15 @@ def main():
             )
 
             outputs = model(**inputs)
-            viterbi_decode = outputs['tags']
+
             validation_loss += outputs['loss'].item()
-            predictions = viterbi_decode[0][0]
-            assert len(predictions) == len(example['ner_tags'])
-            num_correct += sum(1 for p, a in zip(predictions, example['ner_tags']) if p == a)
-            total += len(example['tokens'])
+
+            preds = list(map(id2label.get, outputs['tags'][0][0]))
+            gold = list(map(id2label.get, example['ner_tags']))
+            compute_binary_confusion_matrix_from_bio(preds, gold, confusion_matrix)
 
         logging.info(f'validation loss: {validation_loss}')
-        logging.info(f'acid test num_correct={num_correct}, total={total}')
+        logging.info(f'confusion: {confusion_matrix}')
 
         if epoch % 10 == 0:
             util.save_checkpoint(model, opt, epoch)
