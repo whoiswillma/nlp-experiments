@@ -5,7 +5,7 @@ from typing import Collection, Optional, Union, TypeVar
 import torch
 from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
 
-from ner import NamedEntitySpans, NamedEntityIdSpans
+from ner import NamedEntityLabelSpans, NamedEntityIdSpans
 
 
 # an entity token span is a token-level span including the LHS, *excluding* the
@@ -382,7 +382,7 @@ def greedy_extract_named_entity_spans(
     # remove all spans of nonentity type.
 
     nonentity_spans = []
-    for i, (span, label, logit) in enumerate(list(span_label_logit)):
+    for i, (span, label, logit) in reversed(list(enumerate(span_label_logit))):
         if label == nonentity_label:
             nonentity_spans.append(span)
             del span_label_logit[i]
@@ -443,9 +443,9 @@ def eval_named_entity_spans(
         del inputs['length']
 
         outputs = model(**inputs)
-        max_logits, argmax = torch.max(outputs.logits, -1)
+        max_logits, argmax = torch.max(outputs.logits.squeeze(0), -1)
         for span, logit, label in zip(batch, max_logits, argmax):
-            val = (span, label, logit)
+            val = (span, label.item(), logit.item())
             assert val not in span_label_logit
             span_label_logit.append(val)
 

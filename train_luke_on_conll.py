@@ -59,7 +59,7 @@ def main():
     # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
 
-    NUM_EPOCHS = 3
+    NUM_EPOCHS = 100
 
     # lr from LUKE paper
     opt = torch.optim.Adam(model.parameters(), lr=1e-5)
@@ -78,7 +78,8 @@ def main():
                 example['tokens'],
                 entity_spans_to_labels,
                 nonentity_label,
-                stats
+                stats,
+                nonentity_choose_k='num_entity_spans'
             )
             opt.step()
 

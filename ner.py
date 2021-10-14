@@ -1,5 +1,4 @@
-from typing import TypeVar, Optional
-
+from typing import TypeVar, Optional, Union
 
 T = TypeVar('T')
 
@@ -61,18 +60,19 @@ def extract_nets_from_bio(tokens: list[str], tags: list[str]) -> list[tuple[str,
 
 
 # dict from label string to token-level spans inclusive
-NamedEntitySpans = dict[str, list[tuple[int, int]]]
-
+NamedEntityLabelSpans = dict[str, list[tuple[int, int]]]
 
 # dict from label id to token-level spans inclusive
 NamedEntityIdSpans = dict[int, list[tuple[int, int]]]
 
+NamedEntitySpans = Union[NamedEntityLabelSpans, NamedEntityIdSpans]
 
-def extract_named_entity_spans_from_bio(tags: list[str]) -> NamedEntitySpans:
+
+def extract_named_entity_spans_from_bio(tags: list[str]) -> NamedEntityLabelSpans:
     """Convert BIO tags to named entity spans (inclusive) by type
     """
 
-    named_entity_spans: NamedEntitySpans = {}
+    named_entity_spans: NamedEntityLabelSpans = {}
 
     current_named_entity_start: Optional[int] = None
     current_tag: Optional[str] = None
@@ -169,7 +169,7 @@ def compute_binary_confusion_from_named_entity_spans(
 
     # update true positives, and edit pred_ner_spans and gold_ner_spans to
     # contain disjoint spans
-    named_entity_types: set[str] = pred_ne_spans.keys() | gold_ne_spans.keys()
+    named_entity_types = pred_ne_spans.keys() | gold_ne_spans.keys()
     for net in named_entity_types:
         if net in pred_ne_spans and net in gold_ne_spans:
             for span in list(pred_ne_spans[net]):
