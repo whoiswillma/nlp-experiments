@@ -78,8 +78,7 @@ def main():
                 example['tokens'],
                 entity_spans_to_labels,
                 nonentity_label,
-                stats,
-                nonentity_choose_k='num_entity_spans'
+                stats
             )
             opt.step()
 
