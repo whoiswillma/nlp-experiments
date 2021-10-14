@@ -1,8 +1,14 @@
 import unittest
-from ner import extract_nets_from_bio, extract_nets_from_chunks, extract_named_entity_spans_from_bio
+from ner import (
+    extract_nets_from_bio,
+    extract_nets_from_chunks,
+    extract_named_entity_spans_from_bio,
+    compute_binary_confusion_matrix_from_bio, NERBinaryConfusionMatrix
+)
 
 
 class TestNerUtil(unittest.TestCase):
+
 
     def test_extract_nets_from_chunks(self):
         # example from https://web.stanford.edu/~jurafsky/slp3/8.pdf
@@ -172,7 +178,71 @@ class TestNerUtil(unittest.TestCase):
             extract_named_entity_spans_from_bio(tags)
         )
 
-        
+
+    def test_compute_binary_confusion_matrix_from_bio_true_positive(self):
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-PER', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(tp=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_false_negative(self):
+        pred_bio = ['O', 'O', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_false_positive(self):
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'O', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fp=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_false_positive_negative(self):
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=1, fp=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_accumulate(self):
+        confusion_matrix = NERBinaryConfusionMatrix()
+
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio, confusion_matrix)
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=1, fp=1),
+            confusion_matrix
+        )
+
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio, confusion_matrix)
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=2, fp=2),
+            confusion_matrix
+        )
+
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-PER', 'O']
+        compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio, confusion_matrix)
+        self.assertEqual(
+            NERBinaryConfusionMatrix(tp=1, fn=2, fp=2),
+            confusion_matrix
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
 

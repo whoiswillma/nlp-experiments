@@ -1,6 +1,8 @@
 from typing import TypeVar, Optional
 
+
 T = TypeVar('T')
+
 
 def extract_nets_from_chunks(tokens: list[str], labels: list[T], null_label: T) -> list[tuple[str, T]]:
     named_entity_and_type: list[tuple[str, T]] = []
@@ -102,3 +104,65 @@ def extract_named_entity_spans_from_bio(tags: list[str]) -> dict[str, list[tuple
             raise ValueError(f'Unexpected tag string {tag_str}')
 
     return named_entity_spans
+
+
+class NERBinaryConfusionMatrix:
+
+    def __init__(
+            self,
+            tp: int = 0,
+            fn: int = 0,
+            fp: int = 0
+    ):
+        # true positives (pred and gold both contain span of same type)
+        self.tp = tp
+
+        # false negatives (gold contains a span not matched in pred)
+        self.fn = fn
+
+        # false positives (pred contains a span not matched in gold)
+        self.fp = fp
+
+    def __eq__(self, other):
+        if not isinstance(other, NERBinaryConfusionMatrix):
+            return False
+
+        return self.tp == other.tp and self.fn == other.fn and self.fp == other.fp
+
+
+def compute_binary_confusion_matrix_from_bio(
+        pred_bio: list[str],
+        gold_bio: list[str],
+        accumulate: Optional[NERBinaryConfusionMatrix] = None
+) -> NERBinaryConfusionMatrix:
+
+    if accumulate is None:
+        accumulate = NERBinaryConfusionMatrix()
+
+    pred_ner_spans = extract_named_entity_spans_from_bio(pred_bio)
+    gold_ner_spans = extract_named_entity_spans_from_bio(gold_bio)
+
+    # update true positives, and edit pred_ner_spans and gold_ner_spans to
+    # contain disjoint spans
+    named_entity_types: set[str] = pred_ner_spans.keys() | gold_ner_spans.keys()
+    for net in named_entity_types:
+        if net in pred_ner_spans and net in gold_ner_spans:
+            for span in list(pred_ner_spans[net]):
+                if span in gold_ner_spans[net]:
+                    accumulate.tp += 1
+                    pred_ner_spans[net].remove(span)
+                    gold_ner_spans[net].remove(span)
+
+    # sanity check
+    for net in named_entity_types:
+        if net in pred_ner_spans and net in gold_ner_spans:
+            for span in pred_ner_spans[net]:
+                assert span not in gold_ner_spans[net]
+            for span in gold_ner_spans[net]:
+                assert span not in pred_ner_spans[net]
+
+    accumulate.fn += sum(len(spans) for spans in gold_ner_spans.values())
+    accumulate.fp += sum(len(spans) for spans in pred_ner_spans.values())
+
+    return accumulate
+
