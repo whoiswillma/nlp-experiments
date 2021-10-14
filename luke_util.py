@@ -411,7 +411,7 @@ def greedy_extract_named_entity_spans(
     return convert_span_labels_to_named_entity_spans(selected_span_labels)
 
 
-def extract_named_entity_spans(
+def eval_named_entity_spans(
         model: LukeModel,
         tokenizer: LukeTokenizer,
         tokens: list[str],
