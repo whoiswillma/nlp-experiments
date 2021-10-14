@@ -60,8 +60,12 @@ def extract_nets_from_bio(tokens: list[str], tags: list[str]) -> list[tuple[str,
     return named_entities_and_category
 
 
-# dict from label to token-level spans inclusive
+# dict from label string to token-level spans inclusive
 NamedEntitySpans = dict[str, list[tuple[int, int]]]
+
+
+# dict from label id to token-level spans inclusive
+NamedEntityIdSpans = dict[int, list[tuple[int, int]]]
 
 
 def extract_named_entity_spans_from_bio(tags: list[str]) -> NamedEntitySpans:
