@@ -94,8 +94,6 @@ class BiLstmCrfModel(nn.Module):
 
         output = self._linear(output)
 
-        output = F.log_softmax(output, output.dim() - 1)
-
         result_dict = {}
         max_len = seq_lens.max().item()
         mask = torch.arange(max_len).expand(len(seq_lens), max_len) < seq_lens.unsqueeze(1)

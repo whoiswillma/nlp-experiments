@@ -29,7 +29,7 @@ def main():
     ner_feature = CONLL_TRAIN.features['ner_tags'].feature
     label2id, id2label = conll_util.get_label_mappings(CONLL_TRAIN)
 
-    embedding_dim = 300
+    embedding_dim = 100
     embeddings, token_to_idx = glove_util.load_embeddings_tensor_and_token_to_idx_dict(
         dim=embedding_dim
     )
@@ -43,9 +43,9 @@ def main():
         embedding_dim=embedding_dim,
         embeddings=embeddings,
         freeze_embeddings=True,
-        lstm_hidden_dim=300,
-        lstm_num_layers=3,
-        dropout=0.2,
+        lstm_hidden_dim=600, # 300 dimensional in both directions
+        lstm_num_layers=1,
+        dropout=0,
         crf_constraints=constraints,
     )
     logging.info(f'Constraints {constraints}')
