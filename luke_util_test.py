@@ -129,6 +129,17 @@ class LukeUtilTest(unittest.TestCase):
         )
 
 
+    def test_greedy_extract_named_entity_spans_works_with_only_nonentity(self):
+        span_label_logit = [
+            ((0, 5), 0, 1), # nonentity span from [0, 5)
+            ((5, 10), 0, 1),  # nonentity span from [0, 5)
+        ]
+        self.assertEquals(
+            {},
+            greedy_extract_named_entity_spans(span_label_logit, 0)
+        )
+
+
     def test_greedy_extract_named_entity_spans_selects_entity_by_decreasing_logit(self):
         span_label_logit = [
             ((1, 2), 500, 1),
