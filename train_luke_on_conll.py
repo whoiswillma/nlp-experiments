@@ -5,6 +5,8 @@ import torch
 
 import luke_util
 import util
+import ner
+import conll_util
 
 CONLL_TO_LABEL_MAP = {
     0: 0,
@@ -49,9 +51,11 @@ def main():
     # util.pytorch_set_num_threads(1)
 
     model, tokenizer = luke_util.make_model_and_tokenizer(5)
+    nonentity_label = 0
 
     CONLL_DATASET = datasets.load_dataset('conll2003')
     CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels).select([0])
+    label2id, id2label = conll_util.get_label_mappings(CONLL_TRAIN)
     # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
 
@@ -73,35 +77,30 @@ def main():
                 tokenizer,
                 example['tokens'],
                 entity_spans_to_labels,
-                0,
+                nonentity_label,
                 stats
             )
             opt.step()
 
         logging.info(f'stats = {stats}')
-        util.save_checkpoint(model, opt, epoch)
 
-        # validate
-        correct = 0
-        total = 0
-
+        confusion_matrix = ner.NERBinaryConfusionMatrix()
         for example in util.mytqdm(CONLL_TRAIN, desc='validate'):
-            entity_spans_to_labels = get_entity_spans_to_label(example['labels'])
-
-            doc_correct, doc_total = luke_util.acid_test_luke_model(
+            predictions = luke_util.eval_named_entity_spans(
                 model,
                 tokenizer,
                 example['tokens'],
-                entity_spans_to_labels=entity_spans_to_labels,
-                nonentity_label=0
+                nonentity_label,
+                16
             )
 
-            correct += doc_correct
-            total += doc_total
+            gold = list(map(id2label.get, example['ner_tags']))
+            gold = ner.extract_named_entity_spans_from_bio(gold)
+
+            ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
 
         logging.info('Validation')
-        logging.info(f'num_correct = {correct}')
-        logging.info(f'total_predictions = {total}')
+        logging.info(f'Confusion {confusion_matrix}')
 
 
 if __name__ == '__main__':
