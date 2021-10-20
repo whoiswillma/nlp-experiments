@@ -6,6 +6,15 @@ import logging
 from tqdm import tqdm
 
 
+# PyTorch Processing Unit
+def get_ptpu():
+    result = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu') 
+    print(f'PTPU: {result}')
+    return result
+
+PTPU = get_ptpu()
+
+
 def mytqdm(*args, **kwargs):
     return tqdm(*args, ncols=70, leave=False, **kwargs)
 
@@ -18,8 +27,8 @@ def init_logging():
         filename=log_filename,
         level=logging.DEBUG
     )
-    os.system(f'open {log_filename}')
     print(f'Logging to {log_filename}')
+    os.system(f'open {log_filename}')
 
 
 def pytorch_set_num_threads(num_threads):

@@ -8,6 +8,7 @@ import util
 import ner
 import conll_util
 
+
 CONLL_TO_LABEL_MAP = {
     0: 0,
     1: 1,
@@ -18,6 +19,14 @@ CONLL_TO_LABEL_MAP = {
     6: 3,
     7: 4,
     8: 4
+}
+
+LABEL_TO_STR_MAP = {
+    0: 'O',
+    1: 'PER',
+    2: 'ORG',
+    3: 'LOC',
+    4: 'MISC'
 }
 
 
@@ -54,12 +63,12 @@ def main():
     nonentity_label = 0
 
     CONLL_DATASET = datasets.load_dataset('conll2003')
-    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels)
+    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels).select(range(100))
     label2id, id2label = conll_util.get_label_mappings(CONLL_TRAIN)
     # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
 
-    NUM_EPOCHS = 100
+    NUM_EPOCHS = 10
 
     # lr from LUKE paper
     opt = torch.optim.Adam(model.parameters(), lr=1e-5)
@@ -93,14 +102,21 @@ def main():
                 nonentity_label,
                 16
             )
-
+            predictions = { LABEL_TO_STR_MAP[idx]: spans for idx, spans in predictions.items() }
+            
             gold = list(map(id2label.get, example['ner_tags']))
             gold = ner.extract_named_entity_spans_from_bio(gold)
+
+            logging.info(f'Predictions: {predictions}')
+            logging.info(f'Gold: {gold}')
+            logging.info('')
 
             ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
 
         logging.info('Validation')
         logging.info(f'Confusion {confusion_matrix}')
+
+    util.save_checkpoint(model, opt, epoch)
 
 
 if __name__ == '__main__':
