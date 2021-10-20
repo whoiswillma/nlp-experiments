@@ -191,3 +191,4 @@ def compute_binary_confusion_from_named_entity_spans(
 
     return accumulate
 
+
