@@ -7,6 +7,8 @@ from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel,
 
 from ner import NamedEntityLabelSpans, NamedEntityIdSpans
 
+import util
+
 
 # an entity token span is a token-level span including the LHS, *excluding* the
 # RHS
@@ -204,6 +206,8 @@ def make_model_and_tokenizer(num_labels):
     logging.info(f'model = {model}')
     logging.info(f'tokenizer = {tokenizer}')
 
+    model = model.to(util.PTPU)
+
     return model, tokenizer
 
 
@@ -246,14 +250,16 @@ def train_luke_model(
         entity_spans=all_char_spans,
         return_tensors='pt',
         return_length=True
-    )
+    ).to(util.PTPU)
 
     # TODO: how to determine max length from luke model / tokenizer?
     if inputs.length > 512:
         raise ValueError(f'Input is too long: inputs.length={inputs.length}')
     del inputs['length']
 
-    outputs = model(**inputs, labels=torch.tensor(labels).unsqueeze(0))
+    labels = torch.tensor(labels).unsqueeze(0).to(util.PTPU)
+
+    outputs = model(**inputs, labels=labels)
     outputs.loss.backward()
 
     stats['loss'] += outputs.loss.item()
@@ -291,7 +297,7 @@ def test_luke_model_on_entity_spans(
         entity_spans=entity_char_spans,
         return_tensors='pt',
         return_length = True
-    )
+    ).to(util.PTPU)
 
     # TODO: how to determine max length from luke model / tokenizer?
     if inputs.length > 512:
@@ -435,7 +441,7 @@ def eval_named_entity_spans(
             entity_spans=entity_char_spans,
             return_tensors='pt',
             return_length = True
-        )
+        ).to(util.PTPU)
 
         # TODO: how to determine max length from luke model / tokenizer?
         if inputs.length > 512:
@@ -450,3 +456,4 @@ def eval_named_entity_spans(
             span_label_logit.append(val)
 
     return greedy_extract_named_entity_spans(span_label_logit, nonentity_label)
+
