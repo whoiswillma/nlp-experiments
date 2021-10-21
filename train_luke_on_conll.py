@@ -63,7 +63,7 @@ def main():
     nonentity_label = 0
 
     CONLL_DATASET = datasets.load_dataset('conll2003')
-    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels).select(range(100))
+    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels).select(range(1))
     label2id, id2label = conll_util.get_label_mappings(CONLL_TRAIN)
     # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
