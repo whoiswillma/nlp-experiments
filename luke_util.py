@@ -112,7 +112,6 @@ def get_entity_char_spans_and_labels(
 ) -> tuple[list[EntityCharSpan], list[int]]:
 
     starts, ends = get_word_start_end_positions(tokens)
-    entity_spans_to_labels = take_closure_over_entity_spans_to_labels(entity_spans_to_labels)
 
     entity_char_spans: list[tuple[int, int]] = []
     labels: list[int] = []
@@ -149,7 +148,6 @@ def get_nonentity_char_spans(
         choose_k: Optional[int] = None
 ) -> list[EntityCharSpan]:
 
-    entity_spans = take_closure_over_entity_spans(entity_spans)
     num_tokens = len(tokens)
     starts, ends = get_word_start_end_positions(tokens)
 
@@ -244,9 +242,6 @@ def train_luke_model(
         nonentity_choose_k=nonentity_choose_k
     )
     text = ' '.join(tokens)
-
-    logging.debug(f'{all_char_spans}')
-    logging.debug(f'{labels}')
 
     inputs = tokenizer(
         text,

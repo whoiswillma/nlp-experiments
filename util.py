@@ -4,6 +4,7 @@ from datetime import datetime
 import torch
 import logging
 from tqdm import tqdm
+import gc
 
 
 # PyTorch Processing Unit
@@ -69,4 +70,8 @@ def load_checkpoint(model, opt, name):
 
     if opt:
         opt.load_state_dict(checkpoint['opt_state_dict'])
+
+def free_memory():
+    gc.collect()
+    torch.cuda.empty_cache()
 

@@ -4,3 +4,4 @@ __pycache__
 wifineparse
 fewnerdparse
 glove.6B
+*.slurm
