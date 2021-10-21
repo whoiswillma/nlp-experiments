@@ -63,12 +63,12 @@ def main():
     nonentity_label = 0
 
     CONLL_DATASET = datasets.load_dataset('conll2003')
-    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels).select(range(1))
+    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels)
     label2id, id2label = conll_util.get_label_mappings(CONLL_TRAIN)
-    # CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
+    CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
     # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
 
-    NUM_EPOCHS = 10
+    NUM_EPOCHS = 5
 
     # lr from LUKE paper
     opt = torch.optim.Adam(model.parameters(), lr=1e-5)
@@ -77,46 +77,52 @@ def main():
     for epoch in util.mytqdm(range(NUM_EPOCHS)):
         stats = luke_util.make_train_stats_dict()
 
-        for example in util.mytqdm(CONLL_TRAIN, desc='train'):
-            opt.zero_grad()
-            entity_spans_to_labels = get_entity_spans_to_label(example['labels'])
+        for i, example in util.mytqdm(enumerate(CONLL_TRAIN), desc='train'):
+            try:
+                opt.zero_grad()
+                entity_spans_to_labels = get_entity_spans_to_label(example['labels'])
 
-            luke_util.train_luke_model(
-                model,
-                tokenizer,
-                example['tokens'],
-                entity_spans_to_labels,
-                nonentity_label,
-                stats
-            )
-            opt.step()
+                luke_util.train_luke_model(
+                    model,
+                    tokenizer,
+                    example['tokens'],
+                    entity_spans_to_labels,
+                    nonentity_label,
+                    stats
+                )
+                opt.step()
+
+            except RuntimeError as e:
+                logging.warning(e)
+                logging.warning(f'index: {i}, example: {example}')
+                logging.warning('Moving onto the next training example for now...')
+                logging.warning('')
+    
+                util.free_memory()
+
 
         logging.info(f'stats = {stats}')
+        util.save_checkpoint(model, opt, epoch)
 
-        confusion_matrix = ner.NERBinaryConfusionMatrix()
-        for example in util.mytqdm(CONLL_TRAIN, desc='validate'):
-            predictions = luke_util.eval_named_entity_spans(
-                model,
-                tokenizer,
-                example['tokens'],
-                nonentity_label,
-                16
-            )
-            predictions = { LABEL_TO_STR_MAP[idx]: spans for idx, spans in predictions.items() }
-            
-            gold = list(map(id2label.get, example['ner_tags']))
-            gold = ner.extract_named_entity_spans_from_bio(gold)
+    confusion_matrix = ner.NERBinaryConfusionMatrix()
+    for example in util.mytqdm(CONLL_VALID, desc='validate'):
+        predictions = luke_util.eval_named_entity_spans(
+            model,
+            tokenizer,
+            example['tokens'],
+            nonentity_label,
+            16
+        )
+        predictions = { LABEL_TO_STR_MAP[idx]: spans for idx, spans in predictions.items() }
+        
+        gold = list(map(id2label.get, example['ner_tags']))
+        gold = ner.extract_named_entity_spans_from_bio(gold)
 
-            logging.info(f'Predictions: {predictions}')
-            logging.info(f'Gold: {gold}')
-            logging.info('')
+        ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
 
-            ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
+    logging.info('Validation')
+    logging.info(f'Confusion {confusion_matrix}')
 
-        logging.info('Validation')
-        logging.info(f'Confusion {confusion_matrix}')
-
-    util.save_checkpoint(model, opt, epoch)
 
 
 if __name__ == '__main__':
