@@ -245,6 +245,9 @@ def train_luke_model(
     )
     text = ' '.join(tokens)
 
+    logging.debug(f'{all_char_spans}')
+    logging.debug(f'{labels}')
+
     inputs = tokenizer(
         text,
         entity_spans=all_char_spans,
@@ -263,7 +266,7 @@ def train_luke_model(
     outputs.loss.backward()
 
     stats['loss'] += outputs.loss.item()
-    stats['num_spans'] += len(labels)
+    stats['num_spans'] += labels.shape[1]
 
 
 def test_luke_model_on_entity_spans(
@@ -387,13 +390,9 @@ def greedy_extract_named_entity_spans(
 
     # remove all spans of nonentity type.
 
-    nonentity_spans = []
     for i, (span, label, logit) in reversed(list(enumerate(span_label_logit))):
         if label == nonentity_label:
-            nonentity_spans.append(span)
             del span_label_logit[i]
-
-    nonentity_spans = take_closure_over_entity_spans(nonentity_spans)
 
     # sort remaining spans by logit
     span_label_logit.sort(key=lambda x: x[2], reverse=True)
@@ -407,7 +406,7 @@ def greedy_extract_named_entity_spans(
         return False
 
     for span, label, _ in span_label_logit:
-        if not overlaps_with_selected(span) and span not in nonentity_spans:
+        if not overlaps_with_selected(span):
             # check that we're not inserting any nonentity labels into our
             # selected spans
             assert label != nonentity_label

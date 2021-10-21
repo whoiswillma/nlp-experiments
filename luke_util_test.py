@@ -93,7 +93,7 @@ class LukeUtilTest(unittest.TestCase):
         span_label_logit = [
             ((1, 2), 500, 1), # entity span from [1, 2)
         ]
-        self.assertEquals(
+        self.assertEqual(
             { 500: [(1, 1)] },
             greedy_extract_named_entity_spans(span_label_logit, 0)
         )
@@ -102,7 +102,7 @@ class LukeUtilTest(unittest.TestCase):
             ((1, 2), 500, 1), # entity span from [1, 2)
             ((4, 5), 500, 1),  # entity span from [4, 5)
         ]
-        self.assertEquals(
+        self.assertEqual(
             { 500: [(1, 1), (4, 4)] },
             greedy_extract_named_entity_spans(span_label_logit, 0)
         )
@@ -111,20 +111,20 @@ class LukeUtilTest(unittest.TestCase):
             ((1, 2), 500, 1), # entity span from [1, 2)
             ((4, 5), 501, 1),  # entity span from [4, 5)
         ]
-        self.assertEquals(
+        self.assertEqual(
             { 500: [(1, 1)], 501: [(4, 4)] },
             greedy_extract_named_entity_spans(span_label_logit, 0)
         )
 
 
-    def test_greedy_extract_named_entity_spans_excludes_nonentity(self):
+    def test_greedy_extract_named_entity_spans_ignores_nonentity(self):
         span_label_logit = [
             ((0, 5), 0, 1), # nonentity span from [0, 5)
             ((1, 2), 500, 1), # entity span from [1, 2)
             ((3, 4), 501, 2),  # entity span from [3, 4)
         ]
-        self.assertEquals(
-            {},
+        self.assertEqual(
+            {500: [(1, 1)], 501: [(3, 3)]},
             greedy_extract_named_entity_spans(span_label_logit, 0)
         )
 
@@ -134,7 +134,7 @@ class LukeUtilTest(unittest.TestCase):
             ((0, 5), 0, 1), # nonentity span from [0, 5)
             ((5, 10), 0, 1),  # nonentity span from [0, 5)
         ]
-        self.assertEquals(
+        self.assertEqual(
             {},
             greedy_extract_named_entity_spans(span_label_logit, 0)
         )
@@ -146,7 +146,7 @@ class LukeUtilTest(unittest.TestCase):
             ((1, 2), 501, 2), # label 501 has highest logit value
             ((1, 2), 502, 1),
         ]
-        self.assertEquals(
+        self.assertEqual(
             { 501: [(1, 1)] },
             greedy_extract_named_entity_spans(span_label_logit, 0)
         )
@@ -156,7 +156,7 @@ class LukeUtilTest(unittest.TestCase):
             ((1, 3), 501, 2),
             ((2, 3), 502, 3),
         ]
-        self.assertEquals(
+        self.assertEqual(
             { 500: [(1, 1)], 502: [(2, 2)] },
             greedy_extract_named_entity_spans(span_label_logit, 0)
         )
