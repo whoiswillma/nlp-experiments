@@ -1,8 +1,14 @@
 import unittest
-from ner import extract_nets_from_bio, extract_nets_from_chunks
+from ner import (
+    extract_nets_from_bio,
+    extract_nets_from_chunks,
+    extract_named_entity_spans_from_bio,
+    compute_binary_confusion_matrix_from_bio, NERBinaryConfusionMatrix
+)
 
 
 class TestNerUtil(unittest.TestCase):
+
 
     def test_extract_nets_from_chunks(self):
         # example from https://web.stanford.edu/~jurafsky/slp3/8.pdf
@@ -31,7 +37,7 @@ class TestNerUtil(unittest.TestCase):
             ('Chicago', 'LOC')
         ]
 
-        self.assertEqual(nets, expected)
+        self.assertEqual(expected, nets)
 
 
     def test_extract_nets_from_chunks_correctly_extracts_last_tag(self):
@@ -54,7 +60,7 @@ class TestNerUtil(unittest.TestCase):
             ('United States', 'ORG')
         ]
 
-        self.assertEqual(nets, expected)
+        self.assertEqual(expected, nets)
 
     
     def test_extract_nets_from_bio(self):
@@ -84,9 +90,159 @@ class TestNerUtil(unittest.TestCase):
             ('Chicago', 'LOC')
         ]
 
-        self.assertEqual(nets, expected)
+        self.assertEqual(expected, nets)
 
-        
+
+    def test_extract_named_entity_spans_from_bio(self):
+        tags = [
+            'B-PER',
+            'I-PER',
+            'O',
+            'B-ORG',
+            'I-ORG',
+            'I-ORG',
+            'O',
+            'O',
+            'B-LOC',
+            'O',
+            'O'
+        ]
+
+        self.assertEqual(
+            extract_named_entity_spans_from_bio(tags),
+            {
+                'PER': [(0, 1)],
+                'ORG': [(3, 5)],
+                'LOC': [(8, 8)]
+            }
+        )
+
+
+    def test_extract_named_entity_spans_from_bio_touching_end(self):
+        tags = [
+            'B-PER',
+        ]
+
+        self.assertEqual(
+            {'PER': [(0, 0)]},
+            extract_named_entity_spans_from_bio(tags)
+        )
+
+        tags = [
+            'B-PER',
+            'B-ORG',
+        ]
+
+        self.assertEqual(
+            {'PER': [(0, 0)], 'ORG': [(1, 1)]},
+            extract_named_entity_spans_from_bio(tags)
+        )
+
+        tags = [
+            'B-PER',
+            'I-PER',
+        ]
+
+        self.assertEqual(
+            {'PER': [(0, 1)]},
+            extract_named_entity_spans_from_bio(tags)
+        )
+
+        tags = [
+            'B-PER',
+            'I-PER',
+            'B-ORG',
+        ]
+
+        self.assertEqual(
+            {'PER': [(0, 1)], 'ORG': [(2, 2)]},
+            extract_named_entity_spans_from_bio(tags)
+        )
+
+
+    def test_extract_named_entity_spans_from_bio_with_multiple_entities_of_same_type(self):
+        tags = [
+            'B-PER',
+            'I-PER',
+            'O',
+            'B-ORG',
+            'O',
+            'B-PER',
+            'I-PER',
+            'O',
+            'B-ORG'
+        ]
+
+        self.assertEqual(
+            {'PER': [(0, 1), (5, 6)], 'ORG': [(3, 3), (8, 8)]},
+            extract_named_entity_spans_from_bio(tags)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_true_positive(self):
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-PER', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(tp=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_false_negative(self):
+        pred_bio = ['O', 'O', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_false_positive(self):
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'O', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fp=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_false_positive_negative(self):
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=1, fp=1),
+            compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio)
+        )
+
+
+    def test_compute_binary_confusion_matrix_from_bio_accumulate(self):
+        confusion_matrix = NERBinaryConfusionMatrix()
+
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio, confusion_matrix)
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=1, fp=1),
+            confusion_matrix
+        )
+
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-ORG', 'O']
+        compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio, confusion_matrix)
+        self.assertEqual(
+            NERBinaryConfusionMatrix(fn=2, fp=2),
+            confusion_matrix
+        )
+
+        pred_bio = ['O', 'B-PER', 'O']
+        gold_bio = ['O', 'B-PER', 'O']
+        compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio, confusion_matrix)
+        self.assertEqual(
+            NERBinaryConfusionMatrix(tp=1, fn=2, fp=2),
+            confusion_matrix
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
 
