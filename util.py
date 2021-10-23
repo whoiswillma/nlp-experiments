@@ -17,19 +17,32 @@ PTPU = get_ptpu()
 
 
 def mytqdm(*args, **kwargs):
+    if 'disable' in kwargs and kwargs['disable']:
+        return args[0]
     return tqdm(*args, ncols=70, leave=False, **kwargs)
 
 
-def init_logging():
+def init_logging(log_to_file=True, open_console=True):
+    # this asserts that open_console implies log_to_file
+    assert not log_to_file or open_console
+
     datetime_str = get_datetime_str()
-    log_filename = f'Log_{os.path.basename(sys.argv[0])}-{datetime_str}.log'
+    if log_to_file:
+        log_filename = f'Log_{os.path.basename(sys.argv[0])}-{datetime_str}.log'
+    else:
+        log_filename = None
+
     logging.basicConfig(
         format='%(levelname)s:%(asctime)s %(message)s',
         filename=log_filename,
         level=logging.DEBUG
     )
-    print(f'Logging to {log_filename}')
-    os.system(f'open {log_filename}')
+
+    if log_filename:
+        print(f'Logging to {log_filename}')
+
+        if open_console:
+            os.system(f'open {log_filename}')
 
 
 def pytorch_set_num_threads(num_threads):
