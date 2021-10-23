@@ -49,7 +49,7 @@ def evaluate_model(model, dataloader) -> float:
                 epoch_loss += neg_log_likelihood.item()
     return epoch_loss/len(dataloader.dataset)
 
-def test_eval(test_data, model, batch_size, idx_to_tags, tags_to_idx):
+def test_eval(test_data, model, batch_size, idx_to_tokens, tokens_to_idx, idx_to_tags):
     with torch.no_grad():
         predictions = []
         for batch_idx in range(len(test_data) // batch_size):
@@ -63,15 +63,13 @@ def test_eval(test_data, model, batch_size, idx_to_tags, tags_to_idx):
             for token_seq in tokens:
                 encoded_seq = []
                 for token in token_seq:
-                    if token in tags_to_idx:
-                        encoded_seq.append(tags_to_idx[token])
+                    if token in tokens_to_idx:
+                        encoded_seq.append(tokens_to_idx[token])
                     else:
-                        encoded_seq.append(tags_to_idx[UNK])
+                        encoded_seq.append(tokens_to_idx[UNK])
                 encoded_tokens.append(torch.LongTensor(encoded_seq))
-            print("encoded tokens: ", encoded_tokens)
             batch_predictions = decode_batch(model, encoded_tokens, idx_to_tags=idx_to_tags)
-            print("comp: ", gold_labels, batch_predictions)
-            break
+            # print('comparison: ', gold_labels, batch_predictions)
     # change when doing actual calcs
     return 0.0
 
@@ -82,11 +80,10 @@ def decode_batch(model, batch, idx_to_tags:Dict[int, str]):
         padded_batch = pad_test_batch(batch)
         x_padded, x_lens = padded_batch
         result = model(x_padded, x_lens, None, decode=True)
-        # need to fix def bug here
-        predicted_tags = result['tags'][0][0]
         actual_pred_tags = []
-        for pred in predicted_tags:
-            actual_pred_tags.append([idx_to_tags[i] for i in pred])
+        for pred, _ in result['tags']:
+            actual_pred_tags.append(pred)
+            # actual_pred_tags.append([idx_to_tags[i] for i in pred])
     return actual_pred_tags
 
 def main(args):
@@ -143,7 +140,7 @@ def main(args):
         end_time = time.time()
 
         test_f1 = test_eval(test_data=test, model=bilstm_crf, batch_size=args.batch_size,
-                            idx_to_tags=train_data.idx_to_tags, tags_to_idx=train_data.tags_to_idx)
+                            idx_to_tags=idx_to_tokens, tags_to_idx=tokens_to_idx)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
