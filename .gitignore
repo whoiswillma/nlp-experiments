@@ -4,4 +4,8 @@ __pycache__
 wifineparse
 fewnerdparse
 glove.6B
+bilstmcrf/out/
+bilstmcrf/__pycache__/
+bilstmcrf/env/
+.DS_Store
 *.slurm
