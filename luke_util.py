@@ -1,12 +1,33 @@
 import logging
 import random
-from typing import Collection, Optional, Union
+from typing import Collection, Optional, Union, TypeVar
 
 import torch
 from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
 
+from ner import NamedEntityLabelSpans, NamedEntityIdSpans
 
-def chunked(collection: Collection, n: int) -> Collection:
+import util
+
+
+# an entity token span is a token-level span including the LHS, *excluding* the
+# RHS
+EntityTokenSpan = tuple[int, int]
+
+
+# an entity char span is a char-level span including the LHS, *excluding* the
+# RHS
+EntityCharSpan = tuple[int, int]
+
+
+# either a token span or char span, depending on context
+EntitySpan = Union[EntityTokenSpan, EntityCharSpan]
+
+
+T = TypeVar('T')
+
+
+def chunked(collection: T, n: int) -> list[T]:
     l = len(collection)
     return [collection[i: min(i + n, l)] for i in range(0, l, n)]
 
@@ -26,15 +47,25 @@ def get_word_start_end_positions(tokens: list[str]) -> tuple[list[int], list[int
     return start_positions, end_positions
 
 
+def map_to_char_span(
+        start_end_positions: tuple[list[int], list[int]],
+        token_spans: list[EntityTokenSpan]
+) -> list[EntityCharSpan]:
+    start, end = start_end_positions
+    # we minus one from x[1] because x[1] is exclusive, so we want the end pos
+    # of the token *before* x[1]
+    return list(map(lambda x: (start[x[0]], end[x[1] - 1]), token_spans))
+
+
 def take_closure_over_entity_spans_to_labels(
-        entity_spans_to_labels: dict[tuple[int, int], int]
-) -> dict[tuple[int, int], int]:
+        entity_spans_to_labels: dict[EntityTokenSpan, int]
+) -> dict[EntityTokenSpan, int]:
     """Returns a closure over `entity_spans_to_labels` such that, for every
     entity span (i, j) and associated label l, all sub spans (i', j') such that
     i <= i' < j' <= j is associated with l in its closure.
     """
 
-    if not entity_spans_to_labels:
+    if len(entity_spans_to_labels) == 0:
         return {}
 
     idx_to_label: list[Optional[int]] = [None] * max(end for _, end in entity_spans_to_labels)
@@ -43,7 +74,7 @@ def take_closure_over_entity_spans_to_labels(
         for i in range(start, end):
             idx_to_label[i] = label
 
-    closure: dict[tuple[int, int], int] = {}
+    closure: dict[EntityTokenSpan, int] = {}
 
     def add_all_spans_to_closure(start, end, label):
         for inner_start in range(start, end):
@@ -58,7 +89,7 @@ def take_closure_over_entity_spans_to_labels(
 
     for i, label in enumerate(idx_to_label):
         if prev_label != label:
-            if prev_label:
+            if prev_label is not None:
                 add_all_spans_to_closure(start_index, i, prev_label)
 
             prev_label = label
@@ -68,20 +99,19 @@ def take_closure_over_entity_spans_to_labels(
 
 
 def take_closure_over_entity_spans(
-        entity_spans: Collection[tuple[int, int]]
-) -> Collection[tuple[int, int]]:
+        entity_spans: Collection[EntityTokenSpan]
+) -> set[EntityTokenSpan]:
     fake_entity_spans_to_labels = { entity_span: 0 for entity_span in entity_spans }
     fake_entity_spans_to_labels = take_closure_over_entity_spans_to_labels(fake_entity_spans_to_labels)
-    return fake_entity_spans_to_labels.keys()
+    return set(fake_entity_spans_to_labels.keys())
 
 
 def get_entity_char_spans_and_labels(
         tokens: list[str],
-        entity_spans_to_labels: dict[tuple[int, int], int],
-) -> tuple[list[tuple[int, int]], list[int]]:
+        entity_spans_to_labels: dict[EntityTokenSpan, int],
+) -> tuple[list[EntityCharSpan], list[int]]:
 
     starts, ends = get_word_start_end_positions(tokens)
-    entity_spans_to_labels = take_closure_over_entity_spans_to_labels(entity_spans_to_labels)
 
     entity_char_spans: list[tuple[int, int]] = []
     labels: list[int] = []
@@ -93,24 +123,40 @@ def get_entity_char_spans_and_labels(
     return entity_char_spans, labels
 
 
+def list_all_spans(
+        num_tokens: int,
+        max_span_len: Optional[int] = None,
+        batch_size: Optional[int] = None
+) -> Union[list[EntityTokenSpan], list[list[EntityTokenSpan]]]:
+
+    result = []
+
+    for i in range(num_tokens):
+        for j in range(i + 1, min(num_tokens + 1, i + max_span_len + 1)):
+            result.append((i, j))
+
+    if batch_size is not None:
+        return chunked(result, batch_size)
+    else:
+        return result
+
+
 def get_nonentity_char_spans(
         tokens: list[str],
-        entity_spans: Collection[tuple[int, int]],
+        entity_spans: Collection[EntityTokenSpan],
         max_span_len: Optional[int] = None,
         choose_k: Optional[int] = None
-) -> list[tuple[int, int]]:
+) -> list[EntityCharSpan]:
 
-    entity_spans = take_closure_over_entity_spans(entity_spans)
     num_tokens = len(tokens)
     starts, ends = get_word_start_end_positions(tokens)
 
     max_span_len = max_span_len or num_tokens
 
     non_entity_char_spans = []
-    for start_token_idx in range(0, num_tokens):
-        for end_token_idx in range(start_token_idx + 1, min(num_tokens, start_token_idx + max_span_len) + 1):
-            if (start_token_idx, end_token_idx) not in entity_spans:
-                non_entity_char_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
+    for start_token_idx, end_token_idx in list_all_spans(num_tokens, max_span_len):
+        if (start_token_idx, end_token_idx) not in entity_spans:
+            non_entity_char_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
 
     if choose_k is not None:
         assert choose_k > 0
@@ -121,11 +167,11 @@ def get_nonentity_char_spans(
 
 def get_entity_and_nonentity_char_spans_and_labels(
         tokens: list[str],
-        entity_spans_to_labels: dict[tuple[int, int], int],
+        entity_spans_to_labels: dict[EntityTokenSpan, int],
         nonentity_label: int,
         max_nonentity_span_len: Optional[int] = 16,
         nonentity_choose_k: Optional[int] = None
-) -> tuple[list[tuple[int, int]], list[int]]:
+) -> tuple[list[EntityCharSpan], list[int]]:
 
     entity_char_spans, labels = get_entity_char_spans_and_labels(
         tokens,
@@ -158,6 +204,8 @@ def make_model_and_tokenizer(num_labels):
     logging.info(f'model = {model}')
     logging.info(f'tokenizer = {tokenizer}')
 
+    model = model.to(util.PTPU)
+
     return model, tokenizer
 
 
@@ -172,7 +220,7 @@ def train_luke_model(
         model,
         tokenizer,
         tokens: list[str],
-        entity_spans_to_labels: dict[tuple[int, int], int],
+        entity_spans_to_labels: dict[EntityTokenSpan, int],
         nonentity_label: int,
         stats: dict[str, any],
         nonentity_choose_k: Union[int, str] = 'all'
@@ -200,25 +248,27 @@ def train_luke_model(
         entity_spans=all_char_spans,
         return_tensors='pt',
         return_length=True
-    )
+    ).to(util.PTPU)
 
     # TODO: how to determine max length from luke model / tokenizer?
     if inputs.length > 512:
         raise ValueError(f'Input is too long: inputs.length={inputs.length}')
     del inputs['length']
 
-    outputs = model(**inputs, labels=torch.tensor(labels).unsqueeze(0))
+    labels = torch.tensor(labels).unsqueeze(0).to(util.PTPU)
+
+    outputs = model(**inputs, labels=labels)
     outputs.loss.backward()
 
     stats['loss'] += outputs.loss.item()
-    stats['num_spans'] += len(labels)
+    stats['num_spans'] += labels.shape[1]
 
 
 def test_luke_model_on_entity_spans(
         model,
         tokenizer,
         tokens: list[str],
-        entity_spans: list[tuple[int, int]],
+        entity_spans: list[EntitySpan],
         entity_span_level: str
 ) -> list[int]:
 
@@ -245,7 +295,7 @@ def test_luke_model_on_entity_spans(
         entity_spans=entity_char_spans,
         return_tensors='pt',
         return_length = True
-    )
+    ).to(util.PTPU)
 
     # TODO: how to determine max length from luke model / tokenizer?
     if inputs.length > 512:
@@ -267,7 +317,7 @@ def acid_test_luke_model(
         model,
         tokenizer,
         tokens: list[str],
-        entity_spans_to_labels: dict[tuple[int, int], int],
+        entity_spans_to_labels: dict[EntityTokenSpan, int],
         nonentity_label: int
 ):
     all_char_spans, labels = get_entity_and_nonentity_char_spans_and_labels(
@@ -294,4 +344,110 @@ def acid_test_luke_model(
     total = len(labels)
 
     return correct, total
+
+
+def convert_span_labels_to_named_entity_spans(
+        span_labels: set[tuple[EntityTokenSpan, int]]
+) -> NamedEntityIdSpans:
+    named_entity_spans: NamedEntityIdSpans = {}
+
+    for span, label in span_labels:
+        if label not in named_entity_spans:
+            named_entity_spans[label] = []
+
+        start, end = span
+        # need to subtract 1 from end since NamedEntityIdSpan is inclusive
+        named_entity_spans[label].append((start, end - 1))
+
+    for spans in named_entity_spans.values():
+        spans.sort(key=lambda span: span[0])
+
+    return named_entity_spans
+
+
+def greedy_extract_named_entity_spans(
+        span_label_logit: list[tuple[EntityTokenSpan, int, float]],
+        nonentity_label: int
+) -> NamedEntityIdSpans:
+    """Implements greedy span selection algorithm from LUKE paper.
+
+    p. 6
+    > During the inference, we first exclude all spans classified into the non-
+    > entity type. To avoid selecting overlapping spans, we greedily select a
+    > span from the remaining spans based on the logit of its predicted entity
+    > type in descending order if the span does not overlap with those already
+    > selected.
+
+    """
+
+    # make a shallow copy
+    span_label_logit = list(span_label_logit)
+
+    # remove all spans of nonentity type.
+
+    for i, (span, label, logit) in reversed(list(enumerate(span_label_logit))):
+        if label == nonentity_label:
+            del span_label_logit[i]
+
+    # sort remaining spans by logit
+    span_label_logit.sort(key=lambda x: x[2], reverse=True)
+
+    selected_span_labels: set[tuple[EntityTokenSpan, int]] = set()
+
+    def overlaps_with_selected(span: EntityTokenSpan) -> bool:
+        for other, _ in selected_span_labels:
+            if max(span[0], other[0]) < min(span[1], other[1]):
+                return True
+        return False
+
+    for span, label, _ in span_label_logit:
+        if not overlaps_with_selected(span):
+            # check that we're not inserting any nonentity labels into our
+            # selected spans
+            assert label != nonentity_label
+
+            selected_span_labels.add((span, label))
+
+    return convert_span_labels_to_named_entity_spans(selected_span_labels)
+
+
+def eval_named_entity_spans(
+        model: LukeModel,
+        tokenizer: LukeTokenizer,
+        tokens: list[str],
+        nonentity_label: int,
+        max_span_len: Optional[int]
+) -> NamedEntityIdSpans:
+
+    model.eval()
+
+    start_end_positions = get_word_start_end_positions(tokens)
+    text = ' '.join(tokens)
+    token_spans: list[list[EntityTokenSpan]] = list_all_spans(len(tokens), max_span_len, 16)
+
+    span_label_logit: list[tuple[EntityTokenSpan, int, float]] = []
+
+    for batch in token_spans:
+        entity_char_spans = map_to_char_span(start_end_positions, batch)
+
+        inputs = tokenizer(
+            text,
+            entity_spans=entity_char_spans,
+            return_tensors='pt',
+            return_length = True
+        ).to(util.PTPU)
+
+        # TODO: how to determine max length from luke model / tokenizer?
+        if inputs.length > 512:
+            raise ValueError(f'Input is too long: inputs.length={inputs.length}')
+        del inputs['length']
+
+        outputs = model(**inputs)
+        max_logits, argmax = torch.max(outputs.logits.squeeze(0), -1)
+        for span, logit, label in zip(batch, max_logits, argmax):
+            val = (span, label.item(), logit.item())
+            assert val not in span_label_logit
+            span_label_logit.append(val)
+
+    return greedy_extract_named_entity_spans(span_label_logit, nonentity_label)
 

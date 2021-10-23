@@ -3,7 +3,7 @@ import unittest
 import train_luke_on_conll
 
 
-class MyTestCase(unittest.TestCase):
+class TrainLukeOnConllTestCase(unittest.TestCase):
 
     def test_get_entity_spans_to_label(self):
         labels = [0, 1, 0, 0, 1, 0, 3, 0]

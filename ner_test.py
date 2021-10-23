@@ -3,7 +3,8 @@ from ner import (
     extract_nets_from_bio,
     extract_nets_from_chunks,
     extract_named_entity_spans_from_bio,
-    compute_binary_confusion_matrix_from_bio, NERBinaryConfusionMatrix
+    compute_binary_confusion_matrix_from_bio,
+    NERBinaryConfusionMatrix
 )
 
 
