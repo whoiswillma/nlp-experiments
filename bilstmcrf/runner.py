@@ -1,17 +1,18 @@
 import argparse
-import datasets
-import math
 import os
 import time
-import torch
+from typing import Dict
+
 import allennlp.modules.conditional_random_field as crf
-###
+import datasets
+import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
 from data import Conll2003, UNK, PAD
-from util import pad_batch, pad_test_batch, count_parameters, calculate_epoch_time, build_mappings
 from model import BiLSTM_CRF
-from typing import Dict
+from util import pad_batch, pad_test_batch, count_parameters, calculate_epoch_time, build_mappings
+
 
 def load_data():
     conll_dataset = datasets.load_dataset('conll2003')
