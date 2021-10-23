@@ -7,3 +7,4 @@ glove.6B
 src/out/
 src/__pycache__/
 src/env/
+.DS_Store

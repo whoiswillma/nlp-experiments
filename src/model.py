@@ -57,7 +57,6 @@ class BiLSTM_CRF(nn.Module):
         result = {}
         if decode:
             result['tags'] = self.crf.viterbi_tags(logits=output, mask=mask)
-            print(result['tags'])
         else:
             result['loss'] = -self.crf(inputs=output, tags=labels, mask=mask)
         return result
