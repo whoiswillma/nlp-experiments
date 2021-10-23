@@ -4,6 +4,16 @@ from datetime import datetime
 import torch
 import logging
 from tqdm import tqdm
+import gc
+
+
+# PyTorch Processing Unit
+def get_ptpu():
+    result = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu') 
+    print(f'PTPU: {result}')
+    return result
+
+PTPU = get_ptpu()
 
 
 def mytqdm(*args, **kwargs):
@@ -18,8 +28,8 @@ def init_logging():
         filename=log_filename,
         level=logging.DEBUG
     )
-    os.system(f'open {log_filename}')
     print(f'Logging to {log_filename}')
+    os.system(f'open {log_filename}')
 
 
 def pytorch_set_num_threads(num_threads):
@@ -60,4 +70,8 @@ def load_checkpoint(model, opt, name):
 
     if opt:
         opt.load_state_dict(checkpoint['opt_state_dict'])
+
+def free_memory():
+    gc.collect()
+    torch.cuda.empty_cache()
 
