@@ -47,14 +47,20 @@ def test_eval(test_data, model, batch_size:int, idx_to_tokens:Dict[int, str],
               tokens_to_idx:Dict[str, int], idx_to_tags:Dict[int, str]):
     with torch.no_grad():
         predictions = []
-        for batch_idx in range(len(test_data) // batch_size):
-            batch = test_data.select(range(
-                batch_size * batch_idx,
-                batch_size * (batch_idx + 1)
-            ))
-            tokens = batch['tokens']
+        for batch_idx in range((len(test_data) // batch_size) + 1):
+            batch = None
+            if (batch_size * (batch_idx + 1)) > len(test_data):
+                batch = test_data.select(range(
+                    batch_size * (batch_idx),
+                    len(test_data)
+                ))
+            else:
+                batch = test_data.select(range(
+                    batch_size * batch_idx,
+                    batch_size * (batch_idx + 1)
+                ))
             encoded_tokens = []
-            for token_seq in tokens:
+            for token_seq in batch['tokens']:
                 encoded_seq = []
                 for token in token_seq:
                     if token in tokens_to_idx:
@@ -63,7 +69,8 @@ def test_eval(test_data, model, batch_size:int, idx_to_tokens:Dict[int, str],
                         encoded_seq.append(tokens_to_idx[UNK])
                 encoded_tokens.append(torch.LongTensor(encoded_seq))
             batch_predictions = decode_batch(model, encoded_tokens, idx_to_tags=idx_to_tags)
-            predictions.append([item for sublist in batch_predictions for item in sublist])
+            for pred in batch_predictions:
+                predictions.append(pred)
     return predictions
 
 def decode_batch(model, batch:List[torch.LongTensor], idx_to_tags:Dict[int, str]):
@@ -79,16 +86,16 @@ def decode_batch(model, batch:List[torch.LongTensor], idx_to_tags:Dict[int, str]
 
 def main(args):
     train, val, test = load_data()
-    test = test.select(range(10))
+    test = test.select(range(50))
     ner_tags = train.features['ner_tags'].feature.names
     # get mappings + build datasets
     tokens_to_idx, idx_to_tokens = build_mappings(train['tokens'])
     train_data = Conll2003(
-        examples=train['tokens'][:100], labels=train['ner_tags'][:100],
+        examples=train['tokens'][:1000], labels=train['ner_tags'][:1000],
         ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx
     )
     val_data = Conll2003(
-        examples=val['tokens'][:100], labels=val['ner_tags'][:100],
+        examples=val['tokens'][:10], labels=val['ner_tags'][:10],
         ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx
     )
     # build dataloaders
@@ -133,7 +140,8 @@ def main(args):
         for label_lst in test['ner_tags']:
             gold_labels.append([train_data.idx_to_tags[i] for i in label_lst])
 
-        f1_score = compute_entity_level_f1(predicted_labels=predicted_labels, gold_labels=gold_labels)
+        print(len(predicted_labels), len(gold_labels))
+        p, r, f1 = compute_entity_level_f1(predicted_labels=predicted_labels, gold_labels=gold_labels)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -143,7 +151,9 @@ def main(args):
         print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
         print(f'\tTrain Loss: {train_loss:.3f}')
         print(f'\t Val. Loss: {val_loss:.3f}')
-        print(f'\t Test F1: {f1_score:.3f}')
+        print(f'\t Test F1: {f1:.3f}')
+        print(f'\t Test Precision: {p:.3f}')
+        print(f'\t Test Recall: {r:.3f}')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Args for BiLSTM_CRF')
