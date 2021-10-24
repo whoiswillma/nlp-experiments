@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from data import Conll2003, PTPU, UNK, PAD
 from model import BiLSTM_CRF
-from util import pad_batch, pad_test_batch, count_parameters, calculate_epoch_time, build_mappings
+from util import pad_batch, pad_test_batch, count_parameters, calculate_epoch_time, build_mappings, compute_entity_level_f1
 
 def load_data():
     conll_dataset = datasets.load_dataset('conll2003')
@@ -125,12 +125,15 @@ def main(args):
         val_loss = evaluate_model(model=bilstm_crf, dataloader=val_dataloader)
         end_time = time.time()
 
-        test_preds = test_eval(test_data=test, model=bilstm_crf, batch_size=args.batch_size,
+        predicted_labels= test_eval(test_data=test, model=bilstm_crf, batch_size=args.batch_size,
                                idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx,
                                idx_to_tags=train_data.idx_to_tags)
 
-        for pred in test_preds:
-            print(pred)
+        gold_labels = []
+        for label_lst in test['ner_tags']:
+            gold_labels.append([train_data.idx_to_tags[i] for i in label_lst])
+
+        f1_score = compute_entity_level_f1(predicted_labels=predicted_labels, gold_labels=gold_labels)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -140,6 +143,7 @@ def main(args):
         print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
         print(f'\tTrain Loss: {train_loss:.3f}')
         print(f'\t Val. Loss: {val_loss:.3f}')
+        print(f'\t Test F1: {f1_score:.3f}')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Args for BiLSTM_CRF')
@@ -151,5 +155,6 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', help='train/val batch size', default=64, type=int)
     parser.add_argument('--clip', help='gradient clipping parameter', default=1, type=int)
     parser.add_argument('--epochs', help='number of epochs', default=5, type=int)
+    parser.add_argument('--lr', help='learning rate for optimizer', type=float)
     args = parser.parse_args()
     main(args)
