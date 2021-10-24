@@ -81,7 +81,7 @@ def load_checkpoint(
         name: str,
         model: Optional[torch.nn.Module] = None,
         opt: Optional[torch.optim.Optimizer] = None
-):
+) -> dict[str, any]:
     checkpoint = torch.load(name)
 
     if model:
@@ -91,6 +91,8 @@ def load_checkpoint(
     if opt:
         logging.info(f'Loading opt from checkpoint {name}')
         opt.load_state_dict(checkpoint['opt_state_dict'])
+
+    return checkpoint
 
 def free_memory():
     gc.collect()
