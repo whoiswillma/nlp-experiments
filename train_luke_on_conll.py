@@ -1,13 +1,16 @@
+import argparse
 import logging
+from typing import Optional
 
 import datasets
 import torch
+import torch.utils.data
+from torch.utils.data import DataLoader
 
-import luke_util
-import util
-import ner
 import conll_util
-
+import luke_util
+import ner
+import util
 
 CONLL_TO_LABEL_MAP = {
     0: 0,
@@ -29,8 +32,10 @@ LABEL_TO_STR_MAP = {
     4: 'MISC'
 }
 
+nonentity_label = 0
 
-def map_to_int_labels(example):
+
+def map_example(example):
     example['labels'] = [CONLL_TO_LABEL_MAP[x] for x in example['ner_tags']]
     return example
 
@@ -55,57 +60,72 @@ def get_entity_spans_to_label(labels: list[int]):
     return entity_spans_to_label
 
 
-def main():
-    util.init_logging()
-    # util.pytorch_set_num_threads(1)
-
+def train(args):
     model, tokenizer = luke_util.make_model_and_tokenizer(5)
-    nonentity_label = 0
+    opt = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
-    CONLL_DATASET = datasets.load_dataset('conll2003')
-    CONLL_TRAIN = CONLL_DATASET['train'].map(map_to_int_labels)
-    label2id, id2label = conll_util.get_label_mappings(CONLL_TRAIN)
-    CONLL_VALID = CONLL_DATASET['validation'].map(map_to_int_labels)
-    # CONLL_TEST = CONLL_DATASET['test'].map(map_to_int_labels)
+    if args.checkpoint is not None:
+        util.load_checkpoint(args.checkpoint, model, opt)
 
-    NUM_EPOCHS = 5
-
-    # lr from LUKE paper
-    opt = torch.optim.Adam(model.parameters(), lr=1e-5)
     logging.debug(f'opt = {opt}')
 
-    for epoch in util.mytqdm(range(NUM_EPOCHS)):
+    conll_datasets = datasets.load_dataset('conll2003')
+    conll_train = conll_datasets['train'].map(map_example)
+    train_dataloader = DataLoader(
+        conll_train,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=lambda x: x
+    )
+
+    for epoch in util.mytqdm(range(args.epochs)):
         stats = luke_util.make_train_stats_dict()
 
-        for i, example in util.mytqdm(enumerate(CONLL_TRAIN), desc='train'):
-            try:
-                opt.zero_grad()
-                entity_spans_to_labels = get_entity_spans_to_label(example['labels'])
+        for batch in util.mytqdm(train_dataloader, desc='train'):
+            opt.zero_grad()
 
-                luke_util.train_luke_model(
-                    model,
-                    tokenizer,
-                    example['tokens'],
-                    entity_spans_to_labels,
-                    nonentity_label,
-                    stats
-                )
-                opt.step()
+            for example in batch:
+                try:
+                    entity_spans_to_labels = get_entity_spans_to_label(example['labels'])
 
-            except RuntimeError as e:
-                logging.warning(e)
-                logging.warning(f'index: {i}, example: {example}')
-                logging.warning('Moving onto the next training example for now...')
-                logging.warning('')
-    
-                util.free_memory()
+                    luke_util.train_luke_model(
+                        model,
+                        tokenizer,
+                        example['tokens'],
+                        entity_spans_to_labels,
+                        nonentity_label,
+                        stats
+                    )
 
+                except RuntimeError as e:
+                    logging.warning(e)
+                    logging.warning(f'index: {example["id"]}, example: {example}')
+                    logging.warning('Moving onto the next training example for now...')
+                    logging.warning('')
+
+                    util.free_memory()
+
+            opt.step()
 
         logging.info(f'stats = {stats}')
         util.save_checkpoint(model, opt, epoch)
 
+
+def validate(args):
+    assert args.checkpoint is not None, 'Must provide checkpoint file when validating'
+
+    model, tokenizer = luke_util.make_model_and_tokenizer(5)
+    util.load_checkpoint(
+        args.checkpoint,
+        model=model
+    )
+
+    conll_datasets = datasets.load_dataset('conll2003')
+    conll_valid = conll_datasets['validation'].map(map_example)
+    label2id, id2label = conll_util.get_label_mappings(conll_valid)
+
     confusion_matrix = ner.NERBinaryConfusionMatrix()
-    for example in util.mytqdm(CONLL_VALID, desc='validate'):
+    for example in util.mytqdm(conll_valid, desc='validate'):
         predictions = luke_util.eval_named_entity_spans(
             model,
             tokenizer,
@@ -114,7 +134,7 @@ def main():
             16
         )
         predictions = { LABEL_TO_STR_MAP[idx]: spans for idx, spans in predictions.items() }
-        
+
         gold = list(map(id2label.get, example['ner_tags']))
         gold = ner.extract_named_entity_spans_from_bio(gold)
 
@@ -124,10 +144,28 @@ def main():
     logging.info(f'Confusion {confusion_matrix}')
 
 
+def main(args):
+    util.init_logging()
+
+    logging.info(args)
+
+    if args.op == 'train':
+        train(args)
+    elif args.op == 'validate':
+        validate(args)
+
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Train LUKE on CoNLL')
+    parser.add_argument('op', help='operation to perform', default='train', choices=['train', 'validate'])
+    parser.add_argument('--checkpoint', help='path of checkpoint to load', default=None, type=Optional[str])
+    parser.add_argument('--batch-size', help='train batch size', default=8, type=int)
+    parser.add_argument('--epochs', help='number of epochs', default=5, type=int)
+    parser.add_argument('--learning-rate', help='learning rate', default=1e-5, type=float)
+    args = parser.parse_args()
+
     try:
-        main()
+        main(args)
     except Exception as e:
         logging.warning(e)
         raise e

@@ -1,6 +1,8 @@
 import os
 import sys
 from datetime import datetime
+from typing import Optional
+
 import torch
 import logging
 from tqdm import tqdm
@@ -75,13 +77,19 @@ def save_checkpoint(model, opt, epoch, datetime_str=None):
 
     return name
     
-def load_checkpoint(model, opt, name):
+def load_checkpoint(
+        name: str,
+        model: Optional[torch.nn.Module] = None,
+        opt: Optional[torch.optim.Optimizer] = None
+):
     checkpoint = torch.load(name)
 
     if model:
+        logging.info(f'Loading model from checkpoint {name}')
         model.load_state_dict(checkpoint['model_state_dict'])
 
     if opt:
+        logging.info(f'Loading opt from checkpoint {name}')
         opt.load_state_dict(checkpoint['opt_state_dict'])
 
 def free_memory():

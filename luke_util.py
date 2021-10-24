@@ -5,10 +5,8 @@ from typing import Collection, Optional, Union, TypeVar
 import torch
 from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
 
-from ner import NamedEntityLabelSpans, NamedEntityIdSpans
-
 import util
-
+from ner import NamedEntityIdSpans
 
 # an entity token span is a token-level span including the LHS, *excluding* the
 # RHS
