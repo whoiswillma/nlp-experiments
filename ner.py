@@ -1,3 +1,4 @@
+import logging
 from typing import TypeVar, Optional, Union
 
 T = TypeVar('T')
@@ -64,6 +65,7 @@ NamedEntityLabelSpans = dict[str, list[tuple[int, int]]]
 
 # dict from label id to token-level spans inclusive
 NamedEntityIdSpans = dict[int, list[tuple[int, int]]]
+
 
 NamedEntitySpans = Union[NamedEntityLabelSpans, NamedEntityIdSpans]
 
@@ -140,6 +142,42 @@ class NERBinaryConfusionMatrix:
     def __repr__(self):
         return f'{{ tp: {self.tp}, fn: {self.fn}, fp: {self.fp} }}'
 
+    def precision(self):
+        if self.tp + self.fp == 0:
+            logging.warning(f'Cannot compute precision when tp ({self.tp}) + fp ({self.fn}) == 0.')
+            logging.warning('Returning 0 for now')
+            return 0
+
+        return self.tp / (self.tp + self.fp)
+
+    def recall(self):
+        if self.tp + self.fn == 0:
+            logging.warning(f'Cannot compute recall when tp ({self.tp}) + fn ({self.fn}) == 0.')
+            logging.warning('Returning 0 for now')
+            return 0
+
+        return self.tp / (self.tp + self.fn)
+
+    def f1(self):
+        r = self.recall()
+        p = self.precision()
+        if r + p == 0:
+            logging.warning(f'Cannot compute f1 when recall ({r}) + precision ({p}) == 0.')
+            logging.warning('Returning 0 for now')
+            return 0
+
+        return 2 * p * r / (p + r)
+
+    def metrics(self):
+        return {
+            'tp': self.tp,
+            'fn': self.fn,
+            'fp': self.fp,
+            'precision': self.precision(),
+            'recall': self.recall(),
+            'f1': self.f1()
+        }
+
 
 def compute_binary_confusion_matrix_from_bio(
         pred_bio: list[str],
@@ -156,6 +194,22 @@ def compute_binary_confusion_matrix_from_bio(
         gold_ner_spans,
         accumulate=accumulate
     )
+
+
+def compute_binary_confusion_matrix_from_batched_bio(
+        pred_bio_batched: list[list[str]],
+        gold_bio_batched: list[list[str]],
+        accumulate: Optional[NERBinaryConfusionMatrix] = None
+) -> NERBinaryConfusionMatrix:
+    assert len(pred_bio_batched) == len(gold_bio_batched)
+
+    if accumulate is None:
+        accumulate = NERBinaryConfusionMatrix()
+
+    for pred_bio, gold_bio in zip(pred_bio_batched, gold_bio_batched):
+        compute_binary_confusion_matrix_from_bio(pred_bio, gold_bio, accumulate)
+
+    return accumulate
 
 
 def compute_binary_confusion_from_named_entity_spans(
@@ -190,5 +244,3 @@ def compute_binary_confusion_from_named_entity_spans(
     accumulate.fp += sum(len(spans) for spans in pred_ne_spans.values())
 
     return accumulate
-
-
