@@ -1,11 +1,8 @@
 import collections
 from typing import Tuple, List, Dict
-
 import torch
 import torch.nn.utils.rnn as rnn
-
 from data import PAD, UNK
-
 
 def count_parameters(model) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -46,12 +43,6 @@ def build_mappings(examples: List[str]) -> Tuple[Dict[str, int], Dict[int, str]]
     tokens_to_idx[UNK] = 1
     idx_to_tokens[1] = UNK
     for i, token in enumerate(sorted(vocab)):
-        tokens_to_idx[token] = i + 1
-        idx_to_tokens[i + 1] = token
+        tokens_to_idx[token] = i + 2
+        idx_to_tokens[i + 2] = token
     return tokens_to_idx, idx_to_tokens
-
-def format_output_labels(tags):
-    pass
-
-def entity_level_mean_f1(preds, gold):
-    pass

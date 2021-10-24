@@ -8,4 +8,5 @@ bilstmcrf/out/
 bilstmcrf/__pycache__/
 bilstmcrf/env/
 .DS_Store
+.idea/
 *.slurm
