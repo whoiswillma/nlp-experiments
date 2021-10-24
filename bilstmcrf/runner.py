@@ -91,11 +91,11 @@ def main(args):
     # get mappings + build datasets
     tokens_to_idx, idx_to_tokens = build_mappings(train['tokens'])
     train_data = Conll2003(
-        examples=train['tokens'][:1000], labels=train['ner_tags'][:1000],
+        examples=train['tokens'], labels=train['ner_tags'],
         ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx
     )
     val_data = Conll2003(
-        examples=val['tokens'][:10], labels=val['ner_tags'][:10],
+        examples=val['tokens'], labels=val['ner_tags'],
         ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx
     )
     # build dataloaders
@@ -125,7 +125,7 @@ def main(args):
 
     # run model
     optimizer = torch.optim.Adam(bilstm_crf.parameters())
-    best_val_loss = float('-inf')
+    best_val_loss = float('inf')
     for epoch in range(args.epochs):
         start_time = time.time()
         train_loss = train_model(model=bilstm_crf, dataloader=train_dataloader, optimizer=optimizer, clip=args.clip)
@@ -145,7 +145,9 @@ def main(args):
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(bilstm_crf.state_dict(), os.path.join(args.out, 'bilstm_crf.pt'))
+            out_path = os.path.join(args.out, 'bilst_crf.pt')
+            print(out_path)
+            torch.save(bilstm_crf.state_dict(), out_path)
 
         epoch_mins, epoch_secs = calculate_epoch_time(start_time, end_time)
         print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
