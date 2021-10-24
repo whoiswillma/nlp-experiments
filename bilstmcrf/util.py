@@ -1,8 +1,11 @@
 import collections
-from typing import Tuple, List, Dict
+from typing import Dict, List, Tuple
+
 import torch
 import torch.nn.utils.rnn as rnn
+
 from data import PAD, UNK
+
 
 def count_parameters(model) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)

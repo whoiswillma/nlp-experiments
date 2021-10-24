@@ -1,15 +1,21 @@
 import argparse
+import logging
 import os
 import time
 from typing import Dict, List
+
 import allennlp.modules.conditional_random_field as crf
 import datasets
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from data import Conll2003, PTPU, UNK, PAD
+
+from data import PAD, UNK, Conll2003, device
 from model import BiLSTM_CRF
-from util import pad_batch, pad_test_batch, count_parameters, calculate_epoch_time, build_mappings, compute_entity_level_f1
+from util import (build_mappings, calculate_epoch_time,
+                  compute_entity_level_f1, count_parameters, pad_batch,
+                  pad_test_batch)
+
 
 def load_data():
     conll_dataset = datasets.load_dataset('conll2003')
@@ -86,7 +92,7 @@ def decode_batch(model, batch:List[torch.LongTensor], idx_to_tags:Dict[int, str]
 
 def main(args):
     train, val, test = load_data()
-    test = test.select(range(50))
+    # test = test.select(range(100))
     ner_tags = train.features['ner_tags'].feature.names
     # get mappings + build datasets
     tokens_to_idx, idx_to_tokens = build_mappings(train['tokens'])
@@ -117,7 +123,7 @@ def main(args):
         constraints=crf_constraints,
         pad_idx=train_data.tokens_to_idx[PAD]
     )
-    bilstm_crf.to(PTPU)
+    bilstm_crf.to(device)
 
     # print number of model params
     num_params = count_parameters(bilstm_crf)
@@ -146,7 +152,6 @@ def main(args):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             out_path = os.path.join(args.out, 'bilst_crf.pt')
-            print(out_path)
             torch.save(bilstm_crf.state_dict(), out_path)
 
         epoch_mins, epoch_secs = calculate_epoch_time(start_time, end_time)
