@@ -3,14 +3,14 @@ import torch.nn as nn
 import torch.nn.utils.rnn as rnn
 import allennlp.modules.conditional_random_field as crf
 from typing import List, Tuple, Optional, Dict
+from data import PTPU
 
 class BiLSTM_CRF(nn.Module):
-    def __init__(self, device:torch.device, vocab_size:int, num_tags:int,
+    def __init__(self, vocab_size:int, num_tags:int,
                  embedding_dim:int, lstm_hidden_dim:int, lstm_num_layers:int,
                  dropout:float,constraints:Optional[List[Tuple[int, int]]],
                  pad_idx:int):
         super(BiLSTM_CRF, self).__init__()
-        self.device = device
         self.vocab_size = vocab_size
         self.num_tags = num_tags
         self.constraints=constraints

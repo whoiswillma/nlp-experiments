@@ -2,10 +2,15 @@ import torch
 import collections
 from torch.utils.data import Dataset
 from typing import List, Tuple, Dict
-import util
 
 UNK = '<UNK>'
 PAD = '<P>'
+
+def get_device() -> torch.device:
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    return device
+
+PTPU =  get_device()
 
 class Conll2003(Dataset):
     def __init__(self, examples:List[str], labels:List[int],
@@ -35,7 +40,7 @@ class Conll2003(Dataset):
     def process_examples(self, examples: List[str]) -> List[torch.LongTensor]:
         proc_examples = []
         for example in examples:
-            proc_example = torch.LongTensor([self.tokens_to_idx[t] for t in example]).to(util.PTPU)
+            proc_example = torch.LongTensor([self.tokens_to_idx[t] for t in example]).to(PTPU)
             proc_examples.append(proc_example)
         return proc_examples
 
