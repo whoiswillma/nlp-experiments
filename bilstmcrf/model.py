@@ -1,9 +1,12 @@
+from typing import Dict, List, Optional, Tuple
+
+import allennlp.modules.conditional_random_field as crf
 import torch
 import torch.nn as nn
 import torch.nn.utils.rnn as rnn
-import allennlp.modules.conditional_random_field as crf
-from typing import List, Tuple, Optional, Dict
-from data import PTPU
+
+from data import device
+
 
 class BiLSTM_CRF(nn.Module):
     def __init__(self, vocab_size:int, num_tags:int,
@@ -52,6 +55,7 @@ class BiLSTM_CRF(nn.Module):
         output, _ = rnn.pad_packed_sequence(packed_output, batch_first=True)
         self.output = self.dropout(output)
         output = self.linear(output)
+        output.to(device)
         # pass through crf
         mask = self.create_mask(input)
         result = {}
