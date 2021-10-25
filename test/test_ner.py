@@ -4,7 +4,8 @@ from ner import (
     extract_nets_from_chunks,
     extract_named_entity_spans_from_bio,
     compute_binary_confusion_matrix_from_bio,
-    NERBinaryConfusionMatrix
+    NERBinaryConfusionMatrix,
+    compute_binary_confusion_matrix_from_batched_bio
 )
 
 
@@ -241,6 +242,25 @@ class TestNerUtil(unittest.TestCase):
         self.assertEqual(
             NERBinaryConfusionMatrix(tp=1, fn=2, fp=2),
             confusion_matrix
+        )
+        
+
+    def test_compute_binary_confusion_matrix_from_batched_bio(self):
+        pred = [
+            ['O', 'B-PER', 'O'],
+            ['O', 'B-PER', 'O'],
+            ['O', 'B-PER', 'O']
+        ]
+
+        gold = [
+            ['O', 'B-ORG', 'O'],
+            ['O', 'B-ORG', 'O'],
+            ['O', 'B-PER', 'O']
+        ]
+
+        self.assertEqual(
+            NERBinaryConfusionMatrix(tp=1, fn=2, fp=2),
+            compute_binary_confusion_matrix_from_batched_bio(pred, gold)
         )
 
 
