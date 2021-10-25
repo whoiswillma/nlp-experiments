@@ -14,51 +14,33 @@ def get_device() -> torch.device:
 device = get_device()
 
 class Conll2003(Dataset):
-    def __init__(self, examples:List[str], labels:List[int],
+    def __init__(self, tokens:List[str], labels:List[int],
                  idx_to_tokens:Dict[int, str], tokens_to_idx:Dict[str, int],
-                 ner_tags:List[str]):
-        self.examples = examples
+                 tags_to_idx, idx_to_tags):
+        self.tokens = tokens
         self.labels = labels
-        self.ner_tags = ner_tags
-
-        # set up mappings
-        self.tags_to_idx, self.idx_to_tags = self.process_tags(self.ner_tags)
+        self.tags_to_idx = tags_to_idx
+        self.idx_to_tags = idx_to_tags
         self.tokens_to_idx = tokens_to_idx
         self.idx_to_tokens = idx_to_tokens
 
-        # map examples to encodings
-        self.processed_examples = self.process_examples(self.examples)
-        self.processed_labels = self.process_labels(self.labels)
+    def process_token_str(self, token_str: List[str]) -> List[torch.LongTensor]:
+        processed_token_str = []
+        for token in token_str:
+            if token in self.tokens_to_idx:
+                processed_token_str.append(self.tokens_to_idx[token])
+            else:
+                processed_token_str.append(self.tokens_to_idx[UNK])
+        processed_token_str = torch.LongTensor(processed_token_str).to(device)
+        return processed_token_str
 
-    def process_tags(self, ner_tags: List[str]) -> Tuple[Dict[str, int], Dict[int, str]]:
-        tags_to_idx = collections.defaultdict(int)
-        idx_to_tags = collections.defaultdict(str)
-        for i, tag in enumerate(ner_tags):
-            tags_to_idx[tag] = i
-            idx_to_tags[i] = tag
-        return tags_to_idx, idx_to_tags
-
-    def process_examples(self, examples: List[str]) -> List[torch.LongTensor]:
-        proc_examples = []
-        for example in examples:
-            proc_example = []
-            for token in example:
-                if token in self.tokens_to_idx:
-                    proc_example.append(self.tokens_to_idx[token])
-                else:
-                    proc_example.append(self.tokens_to_idx[UNK])
-            proc_example = torch.LongTensor(proc_example).to(device)
-            proc_examples.append(proc_example)
-        return proc_examples
-
-    def process_labels(self, labels: List[int]) -> List[torch.LongTensor]:
-        new_labels = []
-        for label_vec in labels:
-            new_labels.append(torch.LongTensor(label_vec))
-        return new_labels
+    def process_label_str(self, label_str: List[int]) -> List[torch.LongTensor]:
+        return torch.LongTensor(label_str)
 
     def __getitem__(self, idx:int) -> Tuple[torch.LongTensor, torch.LongTensor]:
-        return self.processed_examples[idx], self.processed_labels[idx]
+        token_tensor = self.process_token_str(self.tokens[idx])
+        label_tensor = self.process_label_str(self.labels[idx])
+        return token_tensor, label_tensor
 
     def __len__(self) -> int:
-        return len(self.processed_examples)
+        return len(self.tokens)

@@ -12,10 +12,9 @@ from tqdm import tqdm
 
 from data import PAD, UNK, Conll2003, device
 from model import BiLSTM_CRF
-from util import (build_mappings, calculate_epoch_time,
+from util import (build_token_mappings, build_tag_mappings, calculate_epoch_time,
                   compute_entity_level_f1, count_parameters, pad_batch,
                   pad_test_batch)
-
 
 def load_data():
     conll_dataset = datasets.load_dataset('conll2003')
@@ -95,14 +94,18 @@ def main(args):
     # test = test.select(range(100))
     ner_tags = train.features['ner_tags'].feature.names
     # get mappings + build datasets
-    tokens_to_idx, idx_to_tokens = build_mappings(train['tokens'])
+    tokens_to_idx, idx_to_tokens = build_token_mappings(train['tokens'])
+    tags_to_idx, idx_to_tags = build_tag_mappings(ner_tags)
+
     train_data = Conll2003(
-        examples=train['tokens'], labels=train['ner_tags'],
-        ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx
+        tokens=train['tokens'], labels=train['ner_tags'],
+        ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx,
+        tags_to_idx=tags_to_idx, idx_to_tags=idx_to_tags
     )
     val_data = Conll2003(
-        examples=val['tokens'], labels=val['ner_tags'],
-        ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx
+        tokens=val['tokens'], labels=val['ner_tags'],
+        ner_tags=ner_tags, idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx,
+        tags_to_idx=tags_to_idx, idx_to_tags=idx_to_tags
     )
     # build dataloaders
     train_dataloader = DataLoader(dataset=train_data, batch_size=args.batch_size, shuffle=True, collate_fn=pad_batch)
