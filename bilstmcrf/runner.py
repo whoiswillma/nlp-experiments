@@ -48,12 +48,11 @@ def evaluate_model(model, dataloader) -> float:
                 epoch_loss += neg_log_likelihood.item()
     return epoch_loss/len(dataloader.dataset)
 
-def test_eval(test_data, model, batch_size:int, idx_to_tokens:Dict[int, str],
-              tokens_to_idx:Dict[str, int], idx_to_tags:Dict[int, str]):
+def test_model(test_data, model, batch_size:int, tokens_to_idx:Dict[str, int],
+               idx_to_tags:Dict[int, str]):
     with torch.no_grad():
         predictions = []
         for batch_idx in range((len(test_data) // batch_size) + 1):
-            batch = None
             if (batch_size * (batch_idx + 1)) > len(test_data):
                 batch = test_data.select(range(
                     batch_size * (batch_idx),
@@ -149,9 +148,8 @@ def main(args):
         val_loss = evaluate_model(model=bilstm_crf, dataloader=val_dataloader)
         end_time = time.time()
 
-        predicted_labels= test_eval(test_data=test, model=bilstm_crf, batch_size=args.batch_size,
-                               idx_to_tokens=idx_to_tokens, tokens_to_idx=tokens_to_idx,
-                               idx_to_tags=train_data.idx_to_tags)
+        predicted_labels= test_model(test_data=test, model=bilstm_crf, batch_size=args.batch_size,
+                                     tokens_to_idx=tokens_to_idx, idx_to_tags=idx_to_tags)
 
         gold_labels = []
         for label_lst in test['ner_tags']:
