@@ -149,7 +149,7 @@ def validate(args):
     model, tokenizer = luke_util.make_model_and_tokenizer(5)
     checkpoint = util.load_checkpoint(
         args.checkpoint,
-        into_model=model
+        model=model
     )
     epoch = checkpoint['epoch']
 
@@ -193,7 +193,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train LUKE on CoNLL')
     parser.add_argument('op', help='operation to perform', default='train', choices=['train', 'validate'])
-    parser.add_argument('--checkpoint', help='path of checkpoint to load', default=None, type=Optional[str])
+    parser.add_argument('--checkpoint', help='path of checkpoint to load', default=None, type=str)
     parser.add_argument('--batch-size', help='train batch size', default=8, type=int)
     parser.add_argument('--epochs', help='number of epochs', default=5, type=int)
 
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning-rate', help='learning rate', default=1e-5, type=float)
     parser.add_argument('--adamw-beta1', default=0.9, type=float)
     parser.add_argument('--adamw-beta2', default=0.98, type=float)
-    parser.add_argument('--adamw-epsilon', default=1e-6, type=float)
+    parser.add_argument('--adamw-eps', default=1e-6, type=float)
     parser.add_argument('--adamw-weight-decay', default=0.01, type=float)
     parser.add_argument('--scheduler-warmup-ratio', default=0.06, type=float)
 
