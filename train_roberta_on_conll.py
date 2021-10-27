@@ -34,7 +34,7 @@ def do_training(args):
 
     # scheduler
     warmup_ratio = 0.1
-    total_steps = len(train_data)
+    total_steps = len(train_data*args.epochs)
     lr_scheduler = get_scheduler(
         name="linear",
         optimizer=optimizer,
