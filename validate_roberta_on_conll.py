@@ -31,7 +31,7 @@ def do_validation(args):
 
     # optimizer
     DEVICE = util.PTPU
-    model.train().to(DEVICE)
+    model.eval().to(DEVICE)
     # optimizer = optim.AdamW(params=model.parameters(), lr=5e-5)
 
     # # scheduler
@@ -45,11 +45,13 @@ def do_validation(args):
     # )
 
     # load checkpoint
+    logging.debug('loading checkpoint...')
     checkpoint = util.load_checkpoint(
         args.checkpoint,
         model=model
     )
     epoch = checkpoint['epoch']
+    logging.debug('checkpoint loaded successfully')
 
     truth = []
     predictions = []
@@ -58,6 +60,7 @@ def do_validation(args):
 
     # iterate through each batch of the test data
     for i, batch in enumerate(util.mytqdm(test_data)):
+        logging.debug(f'running batch {i}')
 
         # do not calculate the gradients
         with torch.no_grad():
