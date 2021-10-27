@@ -25,8 +25,8 @@ def do_validation(args):
 
     # model and tokenizer
 
-    num_labels = conll_util.num_labels(CONLL_TEST)
-    id2label, label2id = conll_util.get_label_mappings(CONLL_TEST)
+    num_labels = conll_util.num_labels(CONLL_DATASET['train'])
+    id2label, label2id = conll_util.get_label_mappings(CONLL_DATASET['train'])
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
     # optimizer
