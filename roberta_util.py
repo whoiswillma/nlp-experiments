@@ -3,7 +3,7 @@ import logging
 from transformers import RobertaForTokenClassification, RobertaTokenizer
 
 
-ROBERTA_VERSION = 'roberta-large'
+ROBERTA_VERSION = 'roberta-base'
 
 
 def make_model(num_labels, id2label, label2id):
@@ -34,7 +34,7 @@ def encode(dataset, tokenizer):
                               padding='max_length', is_split_into_words=True)
         # extend the ner_tags so that it matches the max_length of the input_ids
         labels = example['ner_tags'] + [0] * \
-                 (tokenizer.model_max_length - len(example['ner_tags']))
+            (tokenizer.model_max_length - len(example['ner_tags']))
         # return the encodings and the extended ner_tags
         return {**encodings, 'labels': labels}
 
