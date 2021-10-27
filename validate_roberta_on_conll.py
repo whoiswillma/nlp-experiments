@@ -78,11 +78,11 @@ def do_validation(args):
             pred_values = torch.argmax(outputs[1], dim=2)[idx][:length]
             # go through all true and predicted values and store them in the confusion matrix
             true_labels, pred_labels = eval.to_label_list(
-                true_values, pred_values)
+                true_values, pred_values, id2label)
             truth.append(true_labels)
             predictions.append(pred_labels)
 
-            TP_, FP_, FN_ = eval.calc_scores(true_values, pred_values)
+            TP_, FP_, FN_ = eval.calc_scores(true_values, pred_values, id2label)
             TP += TP_
             FP += FP_
             FN += FN_

@@ -58,7 +58,7 @@ def get_scores(TP, FP, FN):
     return f1, precision, recall
 
 
-def to_label_list(true_values, pred_values):
+def to_label_list(true_values, pred_values, id2label):
     true_labels = [id2label[i] for i in true_values.tolist()]
     pred_labels = [id2label[i] for i in pred_values.tolist()]
     pred_labels = clean_preds(pred_labels)
