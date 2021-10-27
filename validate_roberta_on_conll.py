@@ -26,7 +26,11 @@ def do_validation(args):
     # model and tokenizer
 
     num_labels = conll_util.num_labels(CONLL_DATASET['train'])
-    id2label, label2id = conll_util.get_label_mappings(CONLL_DATASET['train'])
+    label2id, id2label = conll_util.get_label_mappings(CONLL_DATASET['train'])
+    # print("id2label")
+    # print(id2label)
+    # print("label2id")
+    # print(label2id)
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
     # optimizer
@@ -46,11 +50,11 @@ def do_validation(args):
 
     # load checkpoint
     logging.debug('loading checkpoint...')
-    checkpoint = util.load_checkpoint(
-        args.checkpoint,
-        model=model
-    )
-    epoch = checkpoint['epoch']
+    if args.checkpoint is not None:
+        checkpoint = util.load_checkpoint(
+            args.checkpoint,
+            model=model
+        )
     logging.debug('checkpoint loaded successfully')
 
     truth = []
