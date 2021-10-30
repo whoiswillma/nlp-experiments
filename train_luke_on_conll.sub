@@ -10,7 +10,7 @@
 #SBATCH --mem=2000                           # server memory requested (per node)
 #SBATCH -t 3:00:00                           # Time limit (hh:mm:ss)
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2080ti:1
 
 python3 /home/wm274/nlp-experiments/train_luke_on_conll.py train
 

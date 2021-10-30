@@ -153,14 +153,20 @@ def validate(args):
     )
     epoch = checkpoint['epoch']
 
-    logging.info(f'Validating model on epoch {epoch}')
+    logging.info(f'Validating/testing model on epoch {epoch}')
 
     conll_datasets = datasets.load_dataset('conll2003')
-    conll_valid = conll_datasets['validation'].map(map_example)
-    label2id, id2label = conll_util.get_label_mappings(conll_valid)
+    if args.op == 'validate':
+        logging.info(f'Loading CoNLL VALIDATION set')
+        dataset = conll_datasets['validation'].map(map_example)
+    else:
+        logging.info(f'Loading CoNLL TEST set')
+        dataset = conll_datasets['test'].map(map_example)
+
+    label2id, id2label = conll_util.get_label_mappings(dataset)
 
     confusion_matrix = ner.NERBinaryConfusionMatrix()
-    for example in util.mytqdm(conll_valid, desc='validate'):
+    for example in util.mytqdm(dataset, desc='validate'):
         predictions = luke_util.eval_named_entity_spans(
             model,
             tokenizer,
@@ -175,7 +181,10 @@ def validate(args):
 
         ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
 
-    logging.info('Validation')
+    if args.op == 'validate':
+        logging.info(f'On CoNLL VALIDATION:')
+    else:
+        logging.info(f'On CoNLL TEST:')
     logging.info(f'Confusion {confusion_matrix}')
 
 
@@ -186,13 +195,15 @@ def main(args):
 
     if args.op == 'train':
         train(args)
-    elif args.op == 'validate':
+    elif args.op in {'validate', 'test'}:
         validate(args)
+    else:
+        logging.error(f'Invalid op {args.op}')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train LUKE on CoNLL')
-    parser.add_argument('op', help='operation to perform', default='train', choices=['train', 'validate'])
+    parser.add_argument('op', help='operation to perform', default='train', choices=['train', 'validate', 'test'])
     parser.add_argument('--checkpoint', help='path of checkpoint to load', default=None, type=str)
     parser.add_argument('--batch-size', help='train batch size', default=8, type=int)
     parser.add_argument('--epochs', help='number of epochs', default=5, type=int)
@@ -212,3 +223,4 @@ if __name__ == '__main__':
     except Exception as e:
         logging.warning(e)
         raise e
+
