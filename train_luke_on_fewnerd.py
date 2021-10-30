@@ -9,7 +9,7 @@ import luke_util
 import ner
 import util
 import fewnerdparse.dataset as dataset
-from fewnerdparse.dataset import FEWNERD_SUPERVISED, FEWNERD_COARSE_FINE_TYPES
+from fewnerdparse.dataset import FEWNERD_COARSE_FINE_TYPES, load_dataset
 
 
 # the idx of the 'O' label
@@ -42,7 +42,7 @@ def get_entity_spans_to_label(example) -> dict[tuple[int, int]: int]:
 
 
 def train(args):
-    fewnerd_train = FEWNERD_SUPERVISED['train']
+    fewnerd_train = load_dataset(args.dataset_split, 'train')
 
     if args.dataset_scale != 1:
         s = args.dataset_scale
@@ -141,10 +141,10 @@ def evaluate(args):
     logging.info(f'Validating/testing model on epoch {epoch}')
 
     if args.op == 'validate':
-        eval_dataset = FEWNERD_SUPERVISED['dev']
+        eval_dataset = load_dataset(args.dataset_split, 'dev')
     else:
         assert args.op == 'test'
-        eval_dataset = FEWNERD_SUPERVISED['test']
+        eval_dataset = load_dataset(args.dataset_split, 'test')
 
     confusion_matrix = ner.NERBinaryConfusionMatrix()
     for example in util.mytqdm(eval_dataset, desc='validate'):
@@ -172,9 +172,9 @@ def evaluate(args):
         ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
 
     if args.op == 'validate':
-        logging.info(f'On FEWNERD SUPERVISED DEV:')
+        logging.info(f'On FEWNERD {args.dataset_split} DEV:')
     else:
-        logging.info(f'On FEWNERD SUPERVISED TEST:')
+        logging.info(f'On FEWNERD {args.dataset_split} TEST:')
     logging.info(f'Confusion {confusion_matrix}')
 
 
@@ -192,8 +192,8 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train LUKE on CoNLL')
-    parser.add_argument('op', help='operation to perform', default='train', choices=['train', 'validate'])
+    parser = argparse.ArgumentParser(description='Train LUKE on FewNERD')
+    parser.add_argument('op', help='operation to perform', default='train', choices=['train', 'validate', 'test'])
     parser.add_argument('--checkpoint', help='path of checkpoint to load', default=None, type=str)
     parser.add_argument('--batch-size', help='train batch size', default=8, type=int)
     parser.add_argument('--epochs', help='number of epochs', default=5, type=int)
@@ -209,6 +209,7 @@ if __name__ == '__main__':
     # the amount to "scale" the dataset by, e.g. 0.01 would train/eval on only
     # 1% of the dataset.
     parser.add_argument('--dataset-scale', default=1, type=float)
+    parser.add_argument('--dataset-split', default='supervised', choices=['supervised', 'intra', 'inter'])
 
     args = parser.parse_args()
 
