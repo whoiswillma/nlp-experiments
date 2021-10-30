@@ -87,8 +87,8 @@ def train(args):
     if args.checkpoint is not None:
         checkpoint = util.load_checkpoint(
             args.checkpoint,
-            into_model=model,
-            into_opt=opt
+            model=model,
+            opt=opt
         )
         assert checkpoint['epoch'] >= 0
         start_epoch = checkpoint['epoch'] + 1
@@ -191,6 +191,7 @@ def validate(args):
 def main(args):
     util.init_logging()
 
+    logging.info('Depending on the operation being performed, not all args may be relevant.')
     logging.info(f'args: {args}')
 
     if args.op == 'train':
