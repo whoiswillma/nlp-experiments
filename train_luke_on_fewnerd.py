@@ -6,32 +6,31 @@ from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
 
 import luke_util
+import ner
 import util
+import fewnerdparse.dataset as dataset
 from fewnerdparse.dataset import FEWNERD_SUPERVISED, FEWNERD_COARSE_FINE_TYPES
 
 
 # the idx of the 'O' label
-NONENTITY_LABEL = len(FEWNERD_COARSE_FINE_TYPES)
+NONENTITY_LABEL = FEWNERD_COARSE_FINE_TYPES.index(('O', 'O'))
 
 
 def get_entity_spans_to_label(example) -> dict[tuple[int, int]: int]:
     entity_spans_to_labels: dict[tuple[int, int]: int] = {}
 
-    outside_label = len(FEWNERD_COARSE_FINE_TYPES)
-
     tokens = example['tokens']
     label_ids: list[int] = [
         FEWNERD_COARSE_FINE_TYPES.index((coarse, fine))
-        if coarse and fine else outside_label
         for coarse, fine in zip(example['coarse_labels'], example['fine_labels'])
     ]
 
     current_entity_start = -1
-    current_label = outside_label
+    current_label = NONENTITY_LABEL
 
-    for i, (token, label) in enumerate(list(zip(tokens, label_ids)) + [('', outside_label)]):
+    for i, (token, label) in enumerate(list(zip(tokens, label_ids)) + [('', NONENTITY_LABEL)]):
         if current_label != label:
-            if current_label != outside_label:
+            if current_label != NONENTITY_LABEL:
                 assert 0 <= current_entity_start
                 entity_spans_to_labels[(current_entity_start, i)] = current_label
 
@@ -44,6 +43,13 @@ def get_entity_spans_to_label(example) -> dict[tuple[int, int]: int]:
 
 def train(args):
     fewnerd_train = FEWNERD_SUPERVISED['train']
+
+    if args.dataset_scale_factor != 1:
+        s = args.dataset_scale_factor
+        logging.info('Scaling the train dataset by {args.dataset_scale_factor}')
+        count = int(len(fewnerd_train) * s)
+        logging.info('Taking the first {count} examples of the training dataset')
+        fewnerd_train = fewnerd_train[:count]
 
     train_dataloader = DataLoader(
         fewnerd_train,
@@ -122,8 +128,54 @@ def train(args):
         util.save_checkpoint(model, opt, epoch)
 
 
-def validate_test(args):
-    pass
+def evaluate(args):
+    assert args.checkpoint is not None, 'Must provide checkpoint file when validating'
+
+    model, tokenizer = luke_util.make_model_and_tokenizer(5)
+    checkpoint = util.load_checkpoint(
+        args.checkpoint,
+        model=model
+    )
+    epoch = checkpoint['epoch']
+
+    logging.info(f'Validating/testing model on epoch {epoch}')
+
+    if args.op == 'validate':
+        eval_dataset = FEWNERD_SUPERVISED['dev']
+    else:
+        assert args.op == 'test'
+        eval_dataset = FEWNERD_SUPERVISED['test']
+
+    confusion_matrix = ner.NERBinaryConfusionMatrix()
+    for example in util.mytqdm(eval_dataset, desc='validate'):
+        predictions = luke_util.eval_named_entity_spans(
+            model,
+            tokenizer,
+            example['tokens'],
+            NONENTITY_LABEL,
+            16
+        )
+        print(predictions)
+        predictions = {
+            dataset.recombine(*FEWNERD_COARSE_FINE_TYPES[idx]): spans
+            for idx, spans in predictions.items()
+        }
+
+        gold = list(map(
+            lambda coarse, fine: dataset.recombine(coarse, fine),
+            zip(example['coarse_labels'], example['fine_labels'])
+        ))
+        gold = ner.extract_named_entity_spans_from_chunks(gold)
+        print(predictions, gold)
+        print()
+
+        ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
+
+    if args.op == 'validate':
+        logging.info(f'On FEWNERD SUPERVISED DEV:')
+    else:
+        logging.info(f'On FEWNERD SUPERVISED TEST:')
+    logging.info(f'Confusion {confusion_matrix}')
 
 
 def main(args):
@@ -136,7 +188,7 @@ def main(args):
         train(args)
     else:
         assert args.op in {'validate', 'test'}
-        validate_test(args)
+        evaluate(args)
 
 
 if __name__ == '__main__':
@@ -153,6 +205,10 @@ if __name__ == '__main__':
     parser.add_argument('--adamw-eps', default=1e-6, type=float)
     parser.add_argument('--adamw-weight-decay', default=0.01, type=float)
     parser.add_argument('--scheduler-warmup-ratio', default=0.06, type=float)
+
+    # the amount to "scale" the dataset by, e.g. 0.01 would train/eval on only
+    # 1% of the dataset.
+    parser.add_argument('--dataset-scale', default=1, type=float)
 
     args = parser.parse_args()
 
