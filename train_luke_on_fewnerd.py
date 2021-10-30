@@ -44,9 +44,9 @@ def get_entity_spans_to_label(example) -> dict[tuple[int, int]: int]:
 def train(args):
     fewnerd_train = FEWNERD_SUPERVISED['train']
 
-    if args.dataset_scale_factor != 1:
-        s = args.dataset_scale_factor
-        logging.info('Scaling the train dataset by {args.dataset_scale_factor}')
+    if args.dataset_scale != 1:
+        s = args.dataset_scale
+        logging.info('Scaling the train dataset by {args.dataset_scale}')
         count = int(len(fewnerd_train) * s)
         logging.info('Taking the first {count} examples of the training dataset')
         fewnerd_train = fewnerd_train[:count]
