@@ -245,6 +245,7 @@ def train_luke_model(
     spans_per_batch = len(all_char_spans)
     num_spans_trained = 0
 
+
     while num_spans_trained != len(all_char_spans):
         assert num_spans_trained < len(all_char_spans)
 
@@ -265,6 +266,8 @@ def train_luke_model(
                 return_tensors='pt',
                 return_length=True
             ).to(util.PTPU)
+
+            labels_to_train = torch.tensor(labels_to_train).unsqueeze(0).to(util.PTPU)
 
         except RuntimeError as e:
             util.free_memory()
@@ -287,14 +290,23 @@ def train_luke_model(
 
         del inputs['length']
 
-        labels_to_train = torch.tensor(labels_to_train).unsqueeze(0).to(util.PTPU)
+        try:
+            outputs = model(**inputs, labels=labels_to_train)
+            outputs.loss.backward()
 
-        outputs = model(**inputs, labels=labels_to_train)
-        outputs.loss.backward()
+            stats['loss'] += outputs.loss.item()
+            stats['num_spans'] += labels_to_train.shape[1]
+            num_spans_trained += end_idx - start_idx
 
-        stats['loss'] += outputs.loss.item()
-        stats['num_spans'] += labels_to_train.shape[1]
-        num_spans_trained += end_idx - start_idx
+        except RuntimeError as e:
+            util.free_memory()
+
+            logging.warning('Could not backprop model')
+            spans_per_batch //= 2
+            logging.warning(f'Example {example_id}: Halving number of spans per '
+                            f'train iter to {spans_per_batch} and trying again')
+            continue
+
 
 
 def test_luke_model_on_entity_spans(

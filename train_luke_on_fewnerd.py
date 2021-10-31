@@ -108,7 +108,8 @@ def train(args):
                         example['tokens'],
                         entity_spans_to_labels,
                         nonentity_label=NONENTITY_LABEL,
-                        stats=stats
+                        stats=stats,
+                        example_id=example['id']
                     )
 
                 except RuntimeError as e:
