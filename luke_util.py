@@ -221,7 +221,8 @@ def train_luke_model(
         entity_spans_to_labels: dict[EntityTokenSpan, int],
         nonentity_label: int,
         stats: dict[str, any],
-        nonentity_choose_k: Union[int, str] = 'all'
+        nonentity_choose_k: Union[int, str] = 'all',
+        example_id: Optional[int] = None
 ):
 
     model.train()
@@ -241,25 +242,59 @@ def train_luke_model(
     )
     text = ' '.join(tokens)
 
-    inputs = tokenizer(
-        text,
-        entity_spans=all_char_spans,
-        return_tensors='pt',
-        return_length=True
-    ).to(util.PTPU)
+    spans_per_batch = len(all_char_spans)
+    num_spans_trained = 0
 
-    # TODO: how to determine max length from luke model / tokenizer?
-    if inputs.length > 512:
-        raise ValueError(f'Input is too long: inputs.length={inputs.length}')
-    del inputs['length']
+    while num_spans_trained != len(all_char_spans):
+        assert num_spans_trained < len(all_char_spans)
 
-    labels = torch.tensor(labels).unsqueeze(0).to(util.PTPU)
+        if spans_per_batch == 0:
+            raise RuntimeError(f'Unable to train on example {example_id} due to '
+                               f'memory issues')
 
-    outputs = model(**inputs, labels=labels)
-    outputs.loss.backward()
+        start_idx = num_spans_trained
+        end_idx = min(len(all_char_spans), start_idx + spans_per_batch)
 
-    stats['loss'] += outputs.loss.item()
-    stats['num_spans'] += labels.shape[1]
+        char_spans_to_train = all_char_spans[start_idx:end_idx]
+        labels_to_train = labels[start_idx:end_idx]
+
+        try:
+            inputs = tokenizer(
+                text,
+                entity_spans=char_spans_to_train,
+                return_tensors='pt',
+                return_length=True
+            ).to(util.PTPU)
+
+        except RuntimeError as e:
+            util.free_memory()
+
+            logging.warning(f'Example {example_id}: {e}')
+            spans_per_batch //= 2
+            logging.warning(f'Example {example_id}: Halving number of spans per '
+                            f'train iter to {spans_per_batch} and trying again')
+            continue
+
+        # TODO: how to determine max length from luke model / tokenizer?
+        if inputs.length > 512:
+            util.free_memory()
+
+            logging.warning(f'Input is too long: inputs.length={inputs.length}')
+            spans_per_batch //= 2
+            logging.warning(f'Example {example_id}: Halving number of spans per '
+                            f'train iter to {spans_per_batch} and trying again')
+            continue
+
+        del inputs['length']
+
+        labels_to_train = torch.tensor(labels_to_train).unsqueeze(0).to(util.PTPU)
+
+        outputs = model(**inputs, labels=labels_to_train)
+        outputs.loss.backward()
+
+        stats['loss'] += outputs.loss.item()
+        stats['num_spans'] += labels_to_train.shape[1]
+        num_spans_trained += end_idx - start_idx
 
 
 def test_luke_model_on_entity_spans(
