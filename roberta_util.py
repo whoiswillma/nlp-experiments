@@ -3,7 +3,7 @@ import logging
 from transformers import RobertaForTokenClassification, RobertaTokenizer
 
 
-ROBERTA_VERSION = 'roberta-base'
+ROBERTA_VERSION = 'roberta-large'
 
 
 def make_model(num_labels, id2label, label2id):

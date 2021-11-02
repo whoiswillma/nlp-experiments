@@ -10,7 +10,7 @@
 #SBATCH --mem=4000                           # server memory requested (per node)
 #SBATCH -t 4:00:00                           # Time limit (hh:mm:ss)
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:3090:1
 
 python3 /home/eaa66/nlp-experiments/train_roberta_on_conll.py --epochs 10
 
