@@ -68,6 +68,8 @@ def do_training(args):
 
             logging.debug(f'Train loss at batch {i}: {current_loss}')
             current_loss = 0
+            if torch.cuda.is_available():
+               torch.cuda.empty_cache()
 
         logging.debug(f'saving checkpoint...')
         util.save_checkpoint(model, optimizer, epoch)
