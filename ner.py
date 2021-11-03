@@ -116,6 +116,35 @@ def extract_named_entity_spans_from_bio(tags: list[str]) -> NamedEntityLabelSpan
     return named_entity_spans
 
 
+def extract_named_entity_spans_from_chunks(
+        tags: list[str],
+        nonentity_label: str='O'
+) -> NamedEntityLabelSpans:
+    """Extract named entity label spans from chunked predictions
+
+    Chunked predictions have spans of the same label consecutively, i.e. it is
+    impossible to distinguish one long entity span from two shorter spans
+    with the same label.
+    """
+
+    start_index = 0
+    current_label = nonentity_label
+    spans: NamedEntityLabelSpans = {}
+
+    for i, label in enumerate(tags + [nonentity_label]):
+        if current_label != label:
+            if current_label != nonentity_label:
+                if current_label not in spans:
+                    spans[current_label] = []
+                spans[current_label].append((start_index, i - 1))
+
+            start_index = i
+
+        current_label = label
+
+    return spans
+
+
 class NERBinaryConfusionMatrix:
 
     def __init__(
