@@ -25,3 +25,21 @@ Style stuff:
       - It let's you document the changes you made e.g. for weekly reports
       - Batch all your changes into one place for others to see
   - `util.py` contains code for loading indicators, logging, and checkpointing
+
+### Linting
+
+**black**
+   
+This project uses [black](https://github.com/psf/black) as code formatter.
+   
+```bash
+black --config=.github/linters/.python-black
+```
+
+**flake8**
+
+We also use flake8 as an aid. Use it as follows.
+   
+```bash
+flake8 --config=.github/linters/.flake8
+```
