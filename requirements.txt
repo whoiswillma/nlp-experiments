@@ -3,3 +3,4 @@ torch==1.9.0
 transformers==4.10.0
 tqdm==4.62.2
 black == 20.8b1
+flake8

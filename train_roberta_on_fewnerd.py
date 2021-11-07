@@ -73,7 +73,6 @@ def do_training(
             print("Saving checkpoint at epoch: ", epoch + 1)
 
 
-
 def main():
     # util.init_logging()
     # util.pytorch_set_num_threads(1)

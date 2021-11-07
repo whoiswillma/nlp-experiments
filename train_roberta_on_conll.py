@@ -10,10 +10,12 @@ import util
 
 TRAIN_LOSS = []
 DEVICE = None
-SAVE_PATH = 'checkpoints'
+SAVE_PATH = "checkpoints"
 
 
-def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16, warmup_ratio=0.1):
+def do_training(
+    model, n_epochs, train_data, optimizer, effective_batch_size=16, warmup_ratio=0.1
+):
 
     grad_acc_steps = effective_batch_size // 4
     total_steps = len(train_data) / grad_acc_steps * n_epochs
@@ -42,6 +44,7 @@ def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16,
                 batch = {k: v.to(DEVICE) for k, v in batch.items()}
                 # send 'input_ids', 'attention_mask' and 'labels' to the model
                 outputs = model(**batch)
+                # print(outputs, batch)
                 # the outputs are of shape (loss, logits)
                 loss = outputs[0]
                 loss.backward()
@@ -70,39 +73,52 @@ def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16,
 
 
 def main():
-    util.init_logging()
+    # util.init_logging()
     # util.pytorch_set_num_threads(1)
 
     tokenizer = roberta_util.make_tokenizer()
-
-    CONLL_DATASET = roberta_util.encode(
-        datasets.load_dataset('conll2003'), tokenizer)
-    CONLL_TRAIN = CONLL_DATASET['train']
+    # for data in datasets.load_dataset('conll2003'):
+    #     print(datasets.load_dataset('conll2003')['train'][0])
+    # print(datasets.load_dataset('conll2003'))
+    CONLL_DATASET = roberta_util.encode_conll(
+        datasets.load_dataset("conll2003"), tokenizer
+    )
+    CONLL_TRAIN = CONLL_DATASET["train"]
     CONLL_TRAIN_10 = conll_util.downsample(CONLL_TRAIN, 10)
     CONLL_TRAIN_1 = conll_util.downsample(CONLL_TRAIN, 1)
 
     num_labels = conll_util.num_labels(CONLL_TRAIN)
     id2label, label2id = conll_util.get_label_mappings(CONLL_TRAIN)
+    print(
+        num_labels,
+        id2label,
+        label2id,
+        "\n",
+        type(num_labels),
+        type(id2label),
+        type(label2id),
+    )
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
-    NUM_EPOCHS = 3
+    NUM_EPOCHS = 1
 
     # # lr from SUMMARY paper
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model.train().to(DEVICE)
     optimizer = optim.AdamW(params=model.parameters(), lr=5e-5)
-    logging.debug(f'opt = {optimizer}')
+    logging.debug(f"opt = {optimizer}")
 
     train_data = torch.utils.data.DataLoader(CONLL_TRAIN_1, batch_size=4)
-    do_training(model, 1, train_data, optimizer)
+
+    # do_training(model, NUM_EPOCHS, train_data, optimizer)
 
     #     logging.info('Validation')
     #     logging.info(f'num_correct = {correct}')
     #     logging.info(f'total_predictions = {total}')
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
