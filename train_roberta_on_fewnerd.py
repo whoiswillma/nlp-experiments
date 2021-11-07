@@ -5,11 +5,19 @@ import torch
 import torch.optim as optim
 
 import roberta_util
-import luke_util
+import fewnerd_util
 import util
 from fewnerdparse.dataset import FEWNERD_SUPERVISED, FEWNERD_COARSE_FINE_TYPES
 
-def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16, warmup_ratio=0.1):
+
+TRAIN_LOSS = []
+DEVICE = None
+SAVE_PATH = "checkpoints"
+
+
+def do_training(
+    model, n_epochs, train_data, optimizer, effective_batch_size=16, warmup_ratio=0.1
+):
 
     grad_acc_steps = effective_batch_size // 4
     total_steps = len(train_data) / grad_acc_steps * n_epochs
@@ -64,98 +72,49 @@ def do_training(model, n_epochs, train_data, optimizer, effective_batch_size=16,
             model.save_pretrained(path)
             print("Saving checkpoint at epoch: ", epoch + 1)
 
-def get_entity_spans_to_label(example) -> dict[tuple[int, int]: int]:
-    entity_spans_to_labels: dict[tuple[int, int]: int] = {}
-
-    outside_label = len(FEWNERD_COARSE_FINE_TYPES)
-
-    tokens = example['tokens']
-    label_ids: list[int] = [
-        FEWNERD_COARSE_FINE_TYPES.index((coarse, fine))
-        if coarse and fine else outside_label
-        for coarse, fine in zip(example['coarse_labels'], example['fine_labels'])
-    ]
-
-    current_entity_start = -1
-    current_label = outside_label
-
-    for i, (token, label) in enumerate(list(zip(tokens, label_ids)) + [('', outside_label)]):
-        if current_label != label:
-            if current_label != outside_label:
-                assert 0 <= current_entity_start
-                entity_spans_to_labels[(current_entity_start, i)] = current_label
-
-            current_entity_start = i
-
-        current_label = label
-
-    return entity_spans_to_labels
 
 
 def main():
-    util.init_logging()
+    # util.init_logging()
     # util.pytorch_set_num_threads(1)
 
     tokenizer = roberta_util.make_tokenizer()
+
+    FEWNERD_TRAIN_10 = FEWNERD_SUPERVISED["train"][:10]
+    FEWNERD_DEV_10 = FEWNERD_SUPERVISED["dev"][:10]
+    FEWNERD_TEST_10 = FEWNERD_SUPERVISED["test"][:10]
+
+    FEWNERD_10 = {
+        "train": FEWNERD_TRAIN_10,
+        "dev": FEWNERD_DEV_10,
+        "test": FEWNERD_TEST_10,
+    }
+
+    fewnerd_labels = [fst + "-" + scd for fst, scd in FEWNERD_COARSE_FINE_TYPES]
+    num_labels = len(fewnerd_labels)
+    label2id = {lbl: i for i, lbl in enumerate(fewnerd_labels)}
+    id2label = {_id: lbl for lbl, _id in label2id.items()}
+
+    FEWNERD_TRAIN_10 = roberta_util.encode_fewnerd(
+        FEWNERD_TRAIN_10, tokenizer, label2id
+    )
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
-    NONENTITY_LABEL = len(FEWNERD_COARSE_FINE_TYPES)
-    NUM_EPOCHS = 5
+    NUM_EPOCHS = 1
 
+    # lr from SUMMARY paper
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     model.train().to(DEVICE)
-
     optimizer = optim.AdamW(params=model.parameters(), lr=5e-5)
-    logging.debug(f'opt = {optimizer}')
+    logging.debug(f"opt = {optimizer}")
 
-    FEWNERD_TRAIN = FEWNERD_SUPERVISED['train'][:10]
+    train_data = torch.utils.data.DataLoader(FEWNERD_TRAIN_10, batch_size=4)
 
-    # for epoch in util.mytqdm(range(NUM_EPOCHS)):
-    #     stats = luke_util.make_train_stats_dict()
-
-    #     for example in util.mytqdm(FEWNERD_TRAIN, desc='train'):
-    #         opt.zero_grad()
-
-    #         entity_spans_to_labels = get_entity_spans_to_label(example)
-
-    #         luke_util.train_luke_model(
-    #             model,
-    #             tokenizer,
-    #             example['tokens'],
-    #             entity_spans_to_labels,
-    #             nonentity_label=NONENTITY_LABEL,
-    #             stats=stats
-    #         )
-
-    #         opt.step()
-
-    #     logging.info(f'stats = {stats}')
-    #     # util.save_checkpoint(model, opt, epoch)
-
-    #     # validate
-    #     correct = 0
-    #     total = 0
-
-    #     for example in util.mytqdm(FEWNERD_TRAIN, desc='validate'):
-    #         entity_spans_to_labels = get_entity_spans_to_label(example)
-
-    #         doc_correct, doc_total = luke_util.acid_test_luke_model(
-    #             model,
-    #             tokenizer,
-    #             example['tokens'],
-    #             entity_spans_to_labels=entity_spans_to_labels,
-    #             nonentity_label=NONENTITY_LABEL
-    #         )
-
-    #         correct += doc_correct
-    #         total += doc_total
-
-    #     logging.info('Validation')
-    #     logging.info(f'num_correct = {correct}')
-    #     logging.info(f'total_predictions = {total}')
+    do_training(model, NUM_EPOCHS, train_data, optimizer)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         main()
     except Exception as e:
