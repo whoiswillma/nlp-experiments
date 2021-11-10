@@ -69,20 +69,21 @@ def encode_fewnerd(dataset, tokenizer, label2id: dict) -> list:
         ret_encoding: Dict[str, int] = {**encodings, "labels": labels}
         return ret_encoding
 
-    dataset: List[Dict] = list(map(add_encodings, dataset))
-    dataset_to_torch = []
-    for example in dataset:
-        # print(example)
-        # print(torch.Tensor(example["input_ids"]))
-        # print(torch.Tensor(example["attention_mask"]))
-        # print(torch.Tensor(example["labels"]))
+    # dataset: List[Dict] = list(map(add_encodings, dataset))
+    dataset: Dict[str, List[Dict]] = {
+        k: list(map(add_encodings, v)) for k, v in dataset.items()
+    }
 
-        example_to_torch = {
-            "input_ids": torch.Tensor(example["input_ids"]),
-            "attention_mask": torch.Tensor(example["attention_mask"]),
-            "labels": torch.Tensor(example["labels"]),
-        }
-        dataset_to_torch.append(example_to_torch)
+    dataset_to_torch = {}
+    for k, v in dataset.items():
+        dataset_to_torch_list = []
+        for example in v:
+            example_to_torch = {
+                "input_ids": torch.Tensor(example["input_ids"]).long(),
+                "attention_mask": torch.Tensor(example["attention_mask"]).long(),
+                "labels": torch.Tensor(example["labels"]).long(),
+            }
+            dataset_to_torch_list.append(example_to_torch)
+        dataset_to_torch[k] = dataset_to_torch_list
 
-    # print(dataset_to_torch)
     return dataset_to_torch

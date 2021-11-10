@@ -5,7 +5,6 @@ import torch
 import torch.optim as optim
 
 import roberta_util
-import fewnerd_util
 import util
 from fewnerdparse.dataset import FEWNERD_SUPERVISED, FEWNERD_COARSE_FINE_TYPES
 
@@ -38,9 +37,11 @@ def do_training(
         current_loss = 0
         # iterate through each batch of the train data
         for i, batch in enumerate(util.mytqdm(train_data)):
-
+            print(i, batch)
             if epoch < num_skips:
                 lr_scheduler.step()
+                breakpoint()
+
             else:
                 # move the batch tensors to the same device as the
                 batch = {k: v.to(DEVICE) for k, v in batch.items()}
@@ -74,29 +75,20 @@ def do_training(
 
 
 def main():
-    # util.init_logging()
+    util.init_logging()
     # util.pytorch_set_num_threads(1)
 
     tokenizer = roberta_util.make_tokenizer()
-
-    FEWNERD_TRAIN_10 = FEWNERD_SUPERVISED["train"][:10]
-    FEWNERD_DEV_10 = FEWNERD_SUPERVISED["dev"][:10]
-    FEWNERD_TEST_10 = FEWNERD_SUPERVISED["test"][:10]
-
-    FEWNERD_10 = {
-        "train": FEWNERD_TRAIN_10,
-        "dev": FEWNERD_DEV_10,
-        "test": FEWNERD_TEST_10,
-    }
 
     fewnerd_labels = [fst + "-" + scd for fst, scd in FEWNERD_COARSE_FINE_TYPES]
     num_labels = len(fewnerd_labels)
     label2id = {lbl: i for i, lbl in enumerate(fewnerd_labels)}
     id2label = {_id: lbl for lbl, _id in label2id.items()}
 
-    FEWNERD_TRAIN_10 = roberta_util.encode_fewnerd(
-        FEWNERD_TRAIN_10, tokenizer, label2id
-    )
+    FEWNERD_TRAIN = roberta_util.encode_fewnerd(
+        FEWNERD_SUPERVISED, tokenizer, label2id
+    )["train"][:10]
+
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
     NUM_EPOCHS = 1
@@ -108,7 +100,7 @@ def main():
     optimizer = optim.AdamW(params=model.parameters(), lr=5e-5)
     logging.debug(f"opt = {optimizer}")
 
-    train_data = torch.utils.data.DataLoader(FEWNERD_TRAIN_10, batch_size=4)
+    train_data = torch.utils.data.DataLoader(FEWNERD_TRAIN, batch_size=4)
 
     do_training(model, NUM_EPOCHS, train_data, optimizer)
 
