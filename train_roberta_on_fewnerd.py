@@ -45,6 +45,7 @@ def do_training(
             else:
                 # move the batch tensors to the same device as the
                 batch = {k: v.to(DEVICE) for k, v in batch.items()}
+                ## use try except to handle memory error
                 # send 'input_ids', 'attention_mask' and 'labels' to the model
                 outputs = model(**batch)
                 # the outputs are of shape (loss, logits)
