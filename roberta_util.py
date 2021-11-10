@@ -69,7 +69,6 @@ def encode_fewnerd(dataset, tokenizer, label2id: dict) -> list:
         ret_encoding: Dict[str, int] = {**encodings, "labels": labels}
         return ret_encoding
 
-    # dataset: List[Dict] = list(map(add_encodings, dataset))
     dataset: Dict[str, List[Dict]] = {
         k: list(map(add_encodings, v)) for k, v in dataset.items()
     }
