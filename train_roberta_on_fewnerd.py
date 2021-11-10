@@ -87,7 +87,7 @@ def main():
 
     FEWNERD_TRAIN = roberta_util.encode_fewnerd(
         FEWNERD_SUPERVISED, tokenizer, label2id
-    )["train"][:10]
+    )["train"]
 
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
