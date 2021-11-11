@@ -49,11 +49,11 @@ def calc_scores(true_values, pred_values, id2label):
 def get_scores(TP, FP, FN):
     precision, recall, f1 = 0, 0, 0
 
-    if (TP + FP != 0):
-        precision = TP / (TP+FP)
-    if (TP + FN != 0):
+    if TP + FP != 0:
+        precision = TP / (TP + FP)
+    if TP + FN != 0:
         recall = TP / (TP + FN)
-    if (precision + recall != 0):
+    if precision + recall != 0:
         f1 = 2 * precision * recall / (precision + recall)
     return f1, precision, recall
 

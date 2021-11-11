@@ -3,7 +3,12 @@ import random
 from typing import Collection, Optional, Union, TypeVar
 
 import torch
-from transformers import LukeConfig, LukeForEntitySpanClassification, LukeModel, LukeTokenizer
+from transformers import (
+    LukeConfig,
+    LukeForEntitySpanClassification,
+    LukeModel,
+    LukeTokenizer,
+)
 
 import util
 from ner import NamedEntityIdSpans
@@ -22,12 +27,12 @@ EntityCharSpan = tuple[int, int]
 EntitySpan = Union[EntityTokenSpan, EntityCharSpan]
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def chunked(collection: T, n: int) -> list[T]:
     l = len(collection)
-    return [collection[i: min(i + n, l)] for i in range(0, l, n)]
+    return [collection[i : min(i + n, l)] for i in range(0, l, n)]
 
 
 def get_word_start_end_positions(tokens: list[str]) -> tuple[list[int], list[int]]:
@@ -46,8 +51,7 @@ def get_word_start_end_positions(tokens: list[str]) -> tuple[list[int], list[int
 
 
 def map_to_char_span(
-        start_end_positions: tuple[list[int], list[int]],
-        token_spans: list[EntityTokenSpan]
+    start_end_positions: tuple[list[int], list[int]], token_spans: list[EntityTokenSpan]
 ) -> list[EntityCharSpan]:
     start, end = start_end_positions
     # we minus one from x[1] because x[1] is exclusive, so we want the end pos
@@ -56,7 +60,7 @@ def map_to_char_span(
 
 
 def take_closure_over_entity_spans_to_labels(
-        entity_spans_to_labels: dict[EntityTokenSpan, int]
+    entity_spans_to_labels: dict[EntityTokenSpan, int]
 ) -> dict[EntityTokenSpan, int]:
     """Returns a closure over `entity_spans_to_labels` such that, for every
     entity span (i, j) and associated label l, all sub spans (i', j') such that
@@ -66,7 +70,9 @@ def take_closure_over_entity_spans_to_labels(
     if len(entity_spans_to_labels) == 0:
         return {}
 
-    idx_to_label: list[Optional[int]] = [None] * max(end for _, end in entity_spans_to_labels)
+    idx_to_label: list[Optional[int]] = [None] * max(
+        end for _, end in entity_spans_to_labels
+    )
     for entity_span, label in entity_spans_to_labels.items():
         start, end = entity_span
         for i in range(start, end):
@@ -97,16 +103,18 @@ def take_closure_over_entity_spans_to_labels(
 
 
 def take_closure_over_entity_spans(
-        entity_spans: Collection[EntityTokenSpan]
+    entity_spans: Collection[EntityTokenSpan],
 ) -> set[EntityTokenSpan]:
-    fake_entity_spans_to_labels = { entity_span: 0 for entity_span in entity_spans }
-    fake_entity_spans_to_labels = take_closure_over_entity_spans_to_labels(fake_entity_spans_to_labels)
+    fake_entity_spans_to_labels = {entity_span: 0 for entity_span in entity_spans}
+    fake_entity_spans_to_labels = take_closure_over_entity_spans_to_labels(
+        fake_entity_spans_to_labels
+    )
     return set(fake_entity_spans_to_labels.keys())
 
 
 def get_entity_char_spans_and_labels(
-        tokens: list[str],
-        entity_spans_to_labels: dict[EntityTokenSpan, int],
+    tokens: list[str],
+    entity_spans_to_labels: dict[EntityTokenSpan, int],
 ) -> tuple[list[EntityCharSpan], list[int]]:
 
     starts, ends = get_word_start_end_positions(tokens)
@@ -122,9 +130,9 @@ def get_entity_char_spans_and_labels(
 
 
 def list_all_spans(
-        num_tokens: int,
-        max_span_len: Optional[int] = None,
-        batch_size: Optional[int] = None
+    num_tokens: int,
+    max_span_len: Optional[int] = None,
+    batch_size: Optional[int] = None,
 ) -> Union[list[EntityTokenSpan], list[list[EntityTokenSpan]]]:
 
     result = []
@@ -140,10 +148,10 @@ def list_all_spans(
 
 
 def get_nonentity_char_spans(
-        tokens: list[str],
-        entity_spans: Collection[EntityTokenSpan],
-        max_span_len: Optional[int] = None,
-        choose_k: Optional[int] = None
+    tokens: list[str],
+    entity_spans: Collection[EntityTokenSpan],
+    max_span_len: Optional[int] = None,
+    choose_k: Optional[int] = None,
 ) -> list[EntityCharSpan]:
 
     num_tokens = len(tokens)
@@ -154,7 +162,9 @@ def get_nonentity_char_spans(
     non_entity_char_spans = []
     for start_token_idx, end_token_idx in list_all_spans(num_tokens, max_span_len):
         if (start_token_idx, end_token_idx) not in entity_spans:
-            non_entity_char_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
+            non_entity_char_spans.append(
+                (starts[start_token_idx], ends[end_token_idx - 1])
+            )
 
     if choose_k is not None:
         assert choose_k > 0
@@ -164,22 +174,21 @@ def get_nonentity_char_spans(
 
 
 def get_entity_and_nonentity_char_spans_and_labels(
-        tokens: list[str],
-        entity_spans_to_labels: dict[EntityTokenSpan, int],
-        nonentity_label: int,
-        max_nonentity_span_len: Optional[int] = 16,
-        nonentity_choose_k: Optional[int] = None
+    tokens: list[str],
+    entity_spans_to_labels: dict[EntityTokenSpan, int],
+    nonentity_label: int,
+    max_nonentity_span_len: Optional[int] = 16,
+    nonentity_choose_k: Optional[int] = None,
 ) -> tuple[list[EntityCharSpan], list[int]]:
 
     entity_char_spans, labels = get_entity_char_spans_and_labels(
-        tokens,
-        entity_spans_to_labels
+        tokens, entity_spans_to_labels
     )
     nonentity_char_spans = get_nonentity_char_spans(
         tokens,
         entity_spans_to_labels.keys(),
         max_span_len=max_nonentity_span_len,
-        choose_k=nonentity_choose_k
+        choose_k=nonentity_choose_k,
     )
     labels += [nonentity_label] * len(nonentity_char_spans)
     char_spans = entity_char_spans + nonentity_char_spans
@@ -190,17 +199,19 @@ def get_entity_and_nonentity_char_spans_and_labels(
 
 def make_model_and_tokenizer(num_labels):
     # make luke model and tokenizer
-    logging.info('Initializing Model and Tokenizer')
-    config = LukeConfig() 
+    logging.info("Initializing Model and Tokenizer")
+    config = LukeConfig()
     config.num_labels = num_labels
 
     model = LukeForEntitySpanClassification(config)
-    model.luke = LukeModel.from_pretrained('studio-ousia/luke-base')
-    tokenizer = LukeTokenizer.from_pretrained('studio-ousia/luke-base', task='entity_span_classification')
-    logging.info('Model initialized fresh')
-    logging.info(f'config = {config}')
-    logging.info(f'model = {model}')
-    logging.info(f'tokenizer = {tokenizer}')
+    model.luke = LukeModel.from_pretrained("studio-ousia/luke-base")
+    tokenizer = LukeTokenizer.from_pretrained(
+        "studio-ousia/luke-base", task="entity_span_classification"
+    )
+    logging.info("Model initialized fresh")
+    logging.info(f"config = {config}")
+    logging.info(f"model = {model}")
+    logging.info(f"tokenizer = {tokenizer}")
 
     model = model.to(util.PTPU)
 
@@ -208,28 +219,24 @@ def make_model_and_tokenizer(num_labels):
 
 
 def make_train_stats_dict():
-    return {
-        'loss': 0.0,
-        'num_spans': 0
-    }
+    return {"loss": 0.0, "num_spans": 0}
 
 
 def train_luke_model(
-        model,
-        tokenizer,
-        tokens: list[str],
-        entity_spans_to_labels: dict[EntityTokenSpan, int],
-        nonentity_label: int,
-        stats: dict[str, any],
-        nonentity_choose_k: Union[int, str] = 'all',
-        example_id: Optional[int] = None
+    model,
+    tokenizer,
+    tokens: list[str],
+    entity_spans_to_labels: dict[EntityTokenSpan, int],
+    nonentity_label: int,
+    stats: dict[str, any],
+    nonentity_choose_k: Union[int, str] = "all",
 ):
 
     model.train()
 
-    if nonentity_choose_k == 'num_entity_spans':
+    if nonentity_choose_k == "num_entity_spans":
         nonentity_choose_k = len(entity_spans_to_labels)
-    elif nonentity_choose_k == 'all':
+    elif nonentity_choose_k == "all":
         nonentity_choose_k = None
 
     assert nonentity_choose_k is None or type(nonentity_choose_k) is int
@@ -238,114 +245,64 @@ def train_luke_model(
         tokens,
         entity_spans_to_labels,
         nonentity_label,
-        nonentity_choose_k=nonentity_choose_k
+        nonentity_choose_k=nonentity_choose_k,
     )
-    text = ' '.join(tokens)
+    text = " ".join(tokens)
 
-    spans_per_batch = len(all_char_spans)
-    num_spans_trained = 0
+    inputs = tokenizer(
+        text, entity_spans=all_char_spans, return_tensors="pt", return_length=True
+    ).to(util.PTPU)
 
+    # TODO: how to determine max length from luke model / tokenizer?
+    if inputs.length > 512:
+        raise ValueError(f"Input is too long: inputs.length={inputs.length}")
+    del inputs["length"]
 
-    while num_spans_trained != len(all_char_spans):
-        assert num_spans_trained < len(all_char_spans)
+    labels = torch.tensor(labels).unsqueeze(0).to(util.PTPU)
 
-        if spans_per_batch == 0:
-            raise RuntimeError(f'Unable to train on example {example_id} due to '
-                               f'memory issues')
+    outputs = model(**inputs, labels=labels)
+    outputs.loss.backward()
 
-        start_idx = num_spans_trained
-        end_idx = min(len(all_char_spans), start_idx + spans_per_batch)
-
-        char_spans_to_train = all_char_spans[start_idx:end_idx]
-        labels_to_train = labels[start_idx:end_idx]
-
-        try:
-            inputs = tokenizer(
-                text,
-                entity_spans=char_spans_to_train,
-                return_tensors='pt',
-                return_length=True
-            ).to(util.PTPU)
-
-            labels_to_train = torch.tensor(labels_to_train).unsqueeze(0).to(util.PTPU)
-
-        except RuntimeError as e:
-            util.free_memory()
-
-            logging.warning(f'Example {example_id}: {e}')
-            spans_per_batch //= 2
-            logging.warning(f'Example {example_id}: Halving number of spans per '
-                            f'train iter to {spans_per_batch} and trying again')
-            continue
-
-        # TODO: how to determine max length from luke model / tokenizer?
-        if inputs.length > 512:
-            util.free_memory()
-
-            logging.warning(f'Input is too long: inputs.length={inputs.length}')
-            spans_per_batch //= 2
-            logging.warning(f'Example {example_id}: Halving number of spans per '
-                            f'train iter to {spans_per_batch} and trying again')
-            continue
-
-        del inputs['length']
-
-        try:
-            outputs = model(**inputs, labels=labels_to_train)
-            outputs.loss.backward()
-
-            stats['loss'] += outputs.loss.item()
-            stats['num_spans'] += labels_to_train.shape[1]
-            num_spans_trained += end_idx - start_idx
-
-        except RuntimeError as e:
-            util.free_memory()
-
-            logging.warning('Could not backprop model')
-            spans_per_batch //= 2
-            logging.warning(f'Example {example_id}: Halving number of spans per '
-                            f'train iter to {spans_per_batch} and trying again')
-            continue
-
+    stats["loss"] += outputs.loss.item()
+    stats["num_spans"] += labels.shape[1]
 
 
 def test_luke_model_on_entity_spans(
-        model,
-        tokenizer,
-        tokens: list[str],
-        entity_spans: list[EntitySpan],
-        entity_span_level: str
+    model,
+    tokenizer,
+    tokens: list[str],
+    entity_spans: list[EntitySpan],
+    entity_span_level: str,
 ) -> list[int]:
 
     model.eval()
 
-    if entity_span_level == 'token':
+    if entity_span_level == "token":
         starts, ends = get_word_start_end_positions(tokens)
 
         entity_char_spans = []
         for start_token_idx, end_token_idx in entity_spans:
             entity_char_spans.append((starts[start_token_idx], ends[end_token_idx - 1]))
 
-    elif entity_span_level == 'char':
+    elif entity_span_level == "char":
         entity_char_spans = entity_spans
 
     else:
-        raise ValueError(f'Expected entity_span_level to be either "token" or "char". '
-                         f'Got {entity_span_level} instead.')
+        raise ValueError(
+            f'Expected entity_span_level to be either "token" or "char". '
+            f"Got {entity_span_level} instead."
+        )
 
-    text = ' '.join(tokens)
+    text = " ".join(tokens)
 
     inputs = tokenizer(
-        text,
-        entity_spans=entity_char_spans,
-        return_tensors='pt',
-        return_length = True
+        text, entity_spans=entity_char_spans, return_tensors="pt", return_length=True
     ).to(util.PTPU)
 
     # TODO: how to determine max length from luke model / tokenizer?
     if inputs.length > 512:
-        raise ValueError(f'Input is too long: inputs.length={inputs.length}')
-    del inputs['length']
+        raise ValueError(f"Input is too long: inputs.length={inputs.length}")
+    del inputs["length"]
 
     outputs = model(**inputs)
     result = outputs.logits.argmax(-1).squeeze().tolist()
@@ -359,30 +316,26 @@ def test_luke_model_on_entity_spans(
 
 
 def acid_test_luke_model(
-        model,
-        tokenizer,
-        tokens: list[str],
-        entity_spans_to_labels: dict[EntityTokenSpan, int],
-        nonentity_label: int
+    model,
+    tokenizer,
+    tokens: list[str],
+    entity_spans_to_labels: dict[EntityTokenSpan, int],
+    nonentity_label: int,
 ):
     all_char_spans, labels = get_entity_and_nonentity_char_spans_and_labels(
         tokens,
         entity_spans_to_labels,
         nonentity_label,
-        nonentity_choose_k=max(len(tokens) // 2, len(entity_spans_to_labels))
+        nonentity_choose_k=max(len(tokens) // 2, len(entity_spans_to_labels)),
     )
 
     assert len(all_char_spans) == len(labels)
 
     predictions = test_luke_model_on_entity_spans(
-        model,
-        tokenizer,
-        tokens,
-        entity_spans=all_char_spans,
-        entity_span_level='char'
+        model, tokenizer, tokens, entity_spans=all_char_spans, entity_span_level="char"
     )
 
-    logging.debug(f'labels = {labels}, predictions = {predictions}')
+    logging.debug(f"labels = {labels}, predictions = {predictions}")
     assert len(labels) == len(predictions)
 
     correct = sum([1 for pred, label in zip(labels, predictions) if pred == label])
@@ -392,7 +345,7 @@ def acid_test_luke_model(
 
 
 def convert_span_labels_to_named_entity_spans(
-        span_labels: set[tuple[EntityTokenSpan, int]]
+    span_labels: set[tuple[EntityTokenSpan, int]]
 ) -> NamedEntityIdSpans:
     named_entity_spans: NamedEntityIdSpans = {}
 
@@ -411,8 +364,7 @@ def convert_span_labels_to_named_entity_spans(
 
 
 def greedy_extract_named_entity_spans(
-        span_label_logit: list[tuple[EntityTokenSpan, int, float]],
-        nonentity_label: int
+    span_label_logit: list[tuple[EntityTokenSpan, int, float]], nonentity_label: int
 ) -> NamedEntityIdSpans:
     """Implements greedy span selection algorithm from LUKE paper.
 
@@ -457,18 +409,20 @@ def greedy_extract_named_entity_spans(
 
 
 def eval_named_entity_spans(
-        model: LukeModel,
-        tokenizer: LukeTokenizer,
-        tokens: list[str],
-        nonentity_label: int,
-        max_span_len: Optional[int]
+    model: LukeModel,
+    tokenizer: LukeTokenizer,
+    tokens: list[str],
+    nonentity_label: int,
+    max_span_len: Optional[int],
 ) -> NamedEntityIdSpans:
 
     model.eval()
 
     start_end_positions = get_word_start_end_positions(tokens)
-    text = ' '.join(tokens)
-    token_spans: list[list[EntityTokenSpan]] = list_all_spans(len(tokens), max_span_len, 16)
+    text = " ".join(tokens)
+    token_spans: list[list[EntityTokenSpan]] = list_all_spans(
+        len(tokens), max_span_len, 16
+    )
 
     span_label_logit: list[tuple[EntityTokenSpan, int, float]] = []
 
@@ -478,14 +432,14 @@ def eval_named_entity_spans(
         inputs = tokenizer(
             text,
             entity_spans=entity_char_spans,
-            return_tensors='pt',
-            return_length = True
+            return_tensors="pt",
+            return_length=True,
         ).to(util.PTPU)
 
         # TODO: how to determine max length from luke model / tokenizer?
         if inputs.length > 512:
-            raise ValueError(f'Input is too long: inputs.length={inputs.length}')
-        del inputs['length']
+            raise ValueError(f"Input is too long: inputs.length={inputs.length}")
+        del inputs["length"]
 
         outputs = model(**inputs)
         max_logits, argmax = torch.max(outputs.logits.squeeze(0), -1)
@@ -495,4 +449,3 @@ def eval_named_entity_spans(
             span_label_logit.append(val)
 
     return greedy_extract_named_entity_spans(span_label_logit, nonentity_label)
-
