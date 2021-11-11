@@ -12,9 +12,9 @@ import util
 def load_glove_embeddings(dim: int) -> dict[str, torch.Tensor]:
     embeddings = {}
 
-    with open(f'glove.6B/glove.6B.{dim}d.txt', 'rt') as f:
-        for line in util.mytqdm(f, desc='glove'):
-            split = line.split(' ')
+    with open(f"glove.6B/glove.6B.{dim}d.txt", "rt") as f:
+        for line in util.mytqdm(f, desc="glove"):
+            split = line.split(" ")
             token = split[0]
             tensor = torch.tensor([float(val) for val in split[1:]])
             embeddings[token] = tensor
@@ -23,7 +23,7 @@ def load_glove_embeddings(dim: int) -> dict[str, torch.Tensor]:
 
 
 def load_embeddings_tensor_and_token_to_idx_dict(
-        dim: int
+    dim: int,
 ) -> Tuple[torch.Tensor, dict[str, int]]:
 
     embeddings = load_glove_embeddings(dim)
@@ -39,4 +39,3 @@ def load_embeddings_tensor_and_token_to_idx_dict(
         tensors.append(tensor.unsqueeze(0))
 
     return torch.cat(tensors), token_to_idx
-
