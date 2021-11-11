@@ -113,7 +113,8 @@ def take_closure_over_entity_spans(
 
 
 def get_entity_char_spans_and_labels(
-    tokens: list[str], entity_spans_to_labels: dict[EntityTokenSpan, int],
+    tokens: list[str],
+    entity_spans_to_labels: dict[EntityTokenSpan, int],
 ) -> tuple[list[EntityCharSpan], list[int]]:
 
     starts, ends = get_word_start_end_positions(tokens)
