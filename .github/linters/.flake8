@@ -1,14 +1,2 @@
 [flake8]
 ignore = F401, F821, W503, E501, E731, E713, E203
-exclude = proto_python,riiid,src
-# whitespace before : - clash with black linter
-# TODO : refactor for 713, 731
-# TODO : F401 imported but unused -> incomplete sample codes
-# TODO : F821 - undefined name "args"
-# TODO : E501 line length, W503 line break issue => either increase line length or refactor code
-# TODO : line break issue also applied on comments. (sample codes are written as a comment)
-
-# Ignored to set environment variable before loading our code
-per-file-ignores =
-    tests/conftest.py:E402
-
