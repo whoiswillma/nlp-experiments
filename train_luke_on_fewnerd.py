@@ -59,7 +59,7 @@ def train(args):
     )
 
     # set up model, tokenizer, opt, and scheduler
-    model, tokenizer = luke_util.make_model_and_tokenizer(len(FEWNERD_COARSE_FINE_TYPES) + 1)
+    model, tokenizer = luke_util.make_model_and_tokenizer(len(FEWNERD_COARSE_FINE_TYPES))
     opt = torch.optim.AdamW(
         model.parameters(),
         lr=args.learning_rate,
@@ -132,7 +132,7 @@ def train(args):
 def evaluate(args):
     assert args.checkpoint is not None, 'Must provide checkpoint file when validating'
 
-    model, tokenizer = luke_util.make_model_and_tokenizer(5)
+    model, tokenizer = luke_util.make_model_and_tokenizer(len(FEWNERD_COARSE_FINE_TYPES) + 1)
     checkpoint = util.load_checkpoint(
         args.checkpoint,
         model=model
@@ -156,19 +156,17 @@ def evaluate(args):
             NONENTITY_LABEL,
             16
         )
-        print(predictions)
         predictions = {
             dataset.recombine(*FEWNERD_COARSE_FINE_TYPES[idx]): spans
             for idx, spans in predictions.items()
         }
 
-        gold = list(map(
-            lambda coarse, fine: dataset.recombine(coarse, fine),
-            zip(example['coarse_labels'], example['fine_labels'])
-        ))
+        gold = [
+            dataset.recombine(coarse, fine)
+            for coarse, fine in zip(example['coarse_labels'], example['fine_labels']) 
+            if (coarse, fine) != ('O', 'O')
+        ]
         gold = ner.extract_named_entity_spans_from_chunks(gold)
-        print(predictions, gold)
-        print()
 
         ner.compute_binary_confusion_from_named_entity_spans(predictions, gold, confusion_matrix)
 
