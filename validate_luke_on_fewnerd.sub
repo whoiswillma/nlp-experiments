@@ -12,6 +12,6 @@
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:2080ti:1
 
-python3 /home/wm274/nlp-experiments/train_luke_on_fewnerd.py validate --checkpoint='LukeForEntitySpanClassification-Checkpoint-e4-11-01@01-32.pt'
-python3 /home/wm274/nlp-experiments/train_luke_on_fewnerd.py test --checkpoint='LukeForEntitySpanClassification-Checkpoint-e4-11-01@01-32.pt'
+python3 /home/wm274/nlp-experiments/train_luke_on_fewnerd.py validate --checkpoint='LukeForEntitySpanClassification-Checkpoint-e4-11-15@02-00.pt'
+python3 /home/wm274/nlp-experiments/train_luke_on_fewnerd.py test --checkpoint='LukeForEntitySpanClassification-Checkpoint-e4-11-15@02-00.pt'
 

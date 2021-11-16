@@ -129,7 +129,7 @@ def evaluate(args):
     assert args.checkpoint is not None, "Must provide checkpoint file when validating"
 
     model, tokenizer = luke_util.make_model_and_tokenizer(
-        len(FEWNERD_COARSE_FINE_TYPES) + 1  
+        len(FEWNERD_COARSE_FINE_TYPES)
     )
     checkpoint = util.load_checkpoint(
         args.checkpoint,
@@ -158,9 +158,16 @@ def evaluate(args):
         gold = [
             dataset.recombine(coarse, fine)
             for coarse, fine in zip(example['coarse_labels'], example['fine_labels']) 
-            if (coarse, fine) != ('O', 'O')
         ]
-        gold = ner.extract_named_entity_spans_from_chunks(gold)
+        gold = ner.extract_named_entity_spans_from_chunks(gold, nonentity_label="O-O")
+
+        if predictions == gold:
+            print(f"predictions/gold: {gold}")
+            print(f"")
+        else:
+            print(f"predictions: {predictions}")
+            print(f"gold: {gold}")
+            print(f"")
 
         ner.compute_binary_confusion_from_named_entity_spans(
             predictions, gold, confusion_matrix
@@ -173,8 +180,97 @@ def evaluate(args):
     logging.info(f"Confusion {confusion_matrix}")
 
 
+def acid_test(args):
+    fewnerd_train = load_dataset(args.dataset_split, "train")[:1000]
+
+    train_dataloader = DataLoader(
+        fewnerd_train, batch_size=args.batch_size, shuffle=True, collate_fn=lambda x: x
+    )
+
+    # set up model, tokenizer, opt, and scheduler
+    model, tokenizer = luke_util.make_model_and_tokenizer(
+        len(FEWNERD_COARSE_FINE_TYPES)
+    )
+    opt = torch.optim.AdamW(
+        model.parameters(),
+        lr=args.learning_rate,
+        betas=(args.adamw_beta1, args.adamw_beta2),
+        eps=args.adamw_eps,
+        weight_decay=args.adamw_weight_decay,
+    )
+
+    start_epoch = 0
+
+    logging.debug(f"starting epoch: {start_epoch}")
+    logging.debug(f"opt = {opt}")
+
+    # start training
+    for epoch in util.mytqdm(range(start_epoch, args.epochs)):
+        stats = luke_util.make_train_stats_dict()
+
+        for batch in util.mytqdm(train_dataloader, desc="train"):
+            opt.zero_grad()
+
+            for example in batch:
+                try:
+                    entity_spans_to_labels = get_entity_spans_to_label(example)
+
+                    luke_util.train_luke_model(
+                        model,
+                        tokenizer,
+                        example["tokens"],
+                        entity_spans_to_labels,
+                        nonentity_label=NONENTITY_LABEL,
+                        stats=stats,
+                        example_id=example["id"],
+                    )
+
+                except RuntimeError as e:
+                    util.free_memory()
+
+                    logging.warning("")
+                    logging.warning(e)
+                    logging.warning(f"Example: {example}")
+                    logging.warning("Moving onto the next training example for now...")
+                    logging.warning("")
+
+            opt.step()
+
+        logging.info(f"stats = {stats}")
+
+        if epoch % 5 == 4:
+            confusion_matrix = ner.NERBinaryConfusionMatrix()
+            for example in util.mytqdm(fewnerd_train, desc="validate"):
+                print(f"example: {example}")
+
+                predictions = luke_util.eval_named_entity_spans(
+                    model, tokenizer, example["tokens"], NONENTITY_LABEL, 16
+                )
+                print(f"predictions: {predictions}")
+                predictions = {
+                    dataset.recombine(*FEWNERD_COARSE_FINE_TYPES[idx]): spans
+                    for idx, spans in predictions.items()
+                }
+                print(f"predictions: {predictions}")
+
+                gold = [
+                    dataset.recombine(coarse, fine)
+                    for coarse, fine in zip(example['coarse_labels'], example['fine_labels']) 
+                ]
+                gold = ner.extract_named_entity_spans_from_chunks(gold, nonentity_label="O-O")
+
+                print(f"gold: {gold}")
+                print(f"")
+
+                ner.compute_binary_confusion_from_named_entity_spans(
+                    predictions, gold, confusion_matrix
+                )
+
+            logging.info(f"Confusion {confusion_matrix}")
+
+
 def main(args):
-    util.init_logging()
+    util.init_logging(log_to_file=not args.log_to_console)
 
     logging.info(
         "Depending on the operation being performed, not all args may be relevant."
@@ -183,6 +279,8 @@ def main(args):
 
     if args.op == "train":
         train(args)
+    elif args.op == "acidtest":
+        acid_test(args)
     else:
         assert args.op in {"validate", "test"}
         evaluate(args)
@@ -194,7 +292,7 @@ if __name__ == "__main__":
         "op",
         help="operation to perform",
         default="train",
-        choices=["train", "validate", "test"],
+        choices=["train", "validate", "test", "acidtest"],
     )
     parser.add_argument(
         "--checkpoint", help="path of checkpoint to load", default=None, type=str
@@ -220,6 +318,8 @@ if __name__ == "__main__":
         default="supervised",
         choices=["supervised", "intra", "inter"],
     )
+
+    parser.add_argument("--log-to-console", action='store_true')
 
     args = parser.parse_args()
 

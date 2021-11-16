@@ -12,5 +12,5 @@
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:2080ti:1
 
-python3 /home/wm274/nlp-experiments/train_luke_on_fewnerd.py train --epochs=5 --checkpoint='LukeForEntitySpanClassification-Checkpoint-e2-11-14@03-06.pt'
+python3 /home/wm274/nlp-experiments/train_luke_on_fewnerd.py train --epochs=5 --dataset-split=inter
 
