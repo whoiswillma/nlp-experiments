@@ -20,11 +20,11 @@ def train(args):
     fewnerd_labels = [fst + "-" + scd for fst, scd in FEWNERD_COARSE_FINE_TYPES]
     num_labels, label2id, id2label = fewnerd_util.labels_to_mappings(fewnerd_labels)
 
-    FEWNERD_TRAIN = roberta_util.encode_fewnerd(
+    FEWNERD_TRAIN = fewnerd_util.encode_fewnerd(
         FEWNERD_SUPERVISED, tokenizer, label2id
     )["train"]
 
-    # FEWNERD_TRAIN = roberta_util.encode_fewnerd(
+    # FEWNERD_TRAIN = fewnerd_util.encode_fewnerd(
     #     {
     #         "train": FEWNERD_SUPERVISED["train"][:10],
     #         "dev": FEWNERD_SUPERVISED["dev"][:10],
@@ -109,12 +109,12 @@ def evaluate(args):
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
     if args.op == "validate":
-        FEWNERD_VAL = roberta_util.encode_fewnerd(
+        FEWNERD_VAL = fewnerd_util.encode_fewnerd(
             FEWNERD_SUPERVISED, tokenizer, label2id
         )["dev"]
 
     else:
-        FEWNERD_VAL = roberta_util.encode_fewnerd(
+        FEWNERD_VAL = fewnerd_util.encode_fewnerd(
             FEWNERD_SUPERVISED, tokenizer, label2id
         )["test"]
 
