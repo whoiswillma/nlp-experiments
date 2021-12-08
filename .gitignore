@@ -11,3 +11,4 @@ bilstmcrf/env/
 .idea/
 *.slurm
 checkpoints/
+.vscode/
