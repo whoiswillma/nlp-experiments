@@ -159,6 +159,7 @@ def validate(args):
             predictions, gold, confusion_matrix
         )
 
+
     if args.op == "validate":
         logging.info(f"On CoNLL VALIDATION:")
     else:
@@ -168,7 +169,6 @@ def validate(args):
 
 def main(args):
     util.init_logging()
-
     logging.info(
         "Depending on the operation being performed, not all args may be relevant."
     )

@@ -127,7 +127,6 @@ def extract_named_entity_spans_from_chunks(
     tags: list[str], nonentity_label: str = "O"
 ) -> NamedEntityLabelSpans:
     """Extract named entity label spans from chunked predictions
-
     Chunked predictions have spans of the same label consecutively, i.e. it is
     impossible to distinguish one long entity span from two shorter spans
     with the same label.

@@ -10,3 +10,6 @@ bilstmcrf/env/
 .DS_Store
 .idea/
 *.slurm
+checkpoints/
+.vscode/
+

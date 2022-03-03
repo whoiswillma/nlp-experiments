@@ -1,5 +1,4 @@
 import logging
-
 from transformers import RobertaForTokenClassification, RobertaTokenizer
 
 
@@ -27,7 +26,7 @@ def make_tokenizer():
     return tokenizer
 
 
-def encode(dataset, tokenizer):
+def encode_conll(dataset, tokenizer):
     def add_encodings(example):
 
         # get the encodings of the tokens. The tokens are already split, that is why we must add is_split_into_words=True

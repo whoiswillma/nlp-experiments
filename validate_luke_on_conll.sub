@@ -14,4 +14,3 @@
 
 python3 /home/wm274/nlp-experiments/train_luke_on_conll.py validate --checkpoint 'LukeForEntitySpanClassification-Checkpoint-e4-10-27@17-38.pt'
 python3 /home/wm274/nlp-experiments/train_luke_on_conll.py test --checkpoint 'LukeForEntitySpanClassification-Checkpoint-e4-10-27@17-38.pt'
-

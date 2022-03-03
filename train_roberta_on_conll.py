@@ -77,7 +77,7 @@ def main():
 
     tokenizer = roberta_util.make_tokenizer()
 
-    CONLL_DATASET = roberta_util.encode(datasets.load_dataset("conll2003"), tokenizer)
+    CONLL_DATASET = roberta_util.encode_conll(datasets.load_dataset("conll2003"), tokenizer)
     CONLL_TRAIN = CONLL_DATASET["train"]
     # CONLL_TRAIN_10 = conll_util.downsample(CONLL_TRAIN, 10)
     CONLL_TRAIN_1 = conll_util.downsample(CONLL_TRAIN, 1)
@@ -96,6 +96,7 @@ def main():
     logging.debug(f"opt = {optimizer}")
 
     train_data = torch.utils.data.DataLoader(CONLL_TRAIN_1, batch_size=4)
+
     do_training(model, 1, train_data, optimizer)
 
     #     logging.info('Validation')
