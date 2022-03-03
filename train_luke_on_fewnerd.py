@@ -15,6 +15,7 @@ from fewnerdparse.dataset import FEWNERD_COARSE_FINE_TYPES, load_dataset
 # the idx of the 'O' label
 NONENTITY_LABEL = FEWNERD_COARSE_FINE_TYPES.index(("O", "O"))
 
+
 def get_entity_spans_to_label(example) -> dict[tuple[int, int] : int]:
     entity_spans_to_labels: dict[tuple[int, int] : int] = {}
     tokens = example["tokens"]
@@ -184,7 +185,7 @@ def main(args):
         assert args.op in {"validate", "test"}
         evaluate(args)
 
-        
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train LUKE on FewNERD")
     parser.add_argument(

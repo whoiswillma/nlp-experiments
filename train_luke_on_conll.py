@@ -159,7 +159,6 @@ def validate(args):
             predictions, gold, confusion_matrix
         )
 
-
     if args.op == "validate":
         logging.info(f"On CoNLL VALIDATION:")
     else:

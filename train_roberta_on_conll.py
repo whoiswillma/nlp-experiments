@@ -77,7 +77,9 @@ def main():
 
     tokenizer = roberta_util.make_tokenizer()
 
-    CONLL_DATASET = roberta_util.encode_conll(datasets.load_dataset("conll2003"), tokenizer)
+    CONLL_DATASET = roberta_util.encode_conll(
+        datasets.load_dataset("conll2003"), tokenizer
+    )
     CONLL_TRAIN = CONLL_DATASET["train"]
     # CONLL_TRAIN_10 = conll_util.downsample(CONLL_TRAIN, 10)
     CONLL_TRAIN_1 = conll_util.downsample(CONLL_TRAIN, 1)
