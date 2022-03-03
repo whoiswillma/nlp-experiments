@@ -66,9 +66,7 @@ def train(args):
 
     start_epoch = 0
     if args.checkpoint is not None:
-        checkpoint = util.load_checkpoint(
-            args.checkpoint, into_model=model, into_opt=opt
-        )
+        checkpoint = util.load_checkpoint(args.checkpoint, model=model, opt=opt)
         assert checkpoint["epoch"] >= 0
         start_epoch = checkpoint["epoch"] + 1
 
@@ -133,14 +131,20 @@ def validate(args):
     checkpoint = util.load_checkpoint(args.checkpoint, model=model)
     epoch = checkpoint["epoch"]
 
-    logging.info(f"Validating model on epoch {epoch}")
+    logging.info(f"Validating/testing model on epoch {epoch}")
 
     conll_datasets = datasets.load_dataset("conll2003")
-    conll_valid = conll_datasets["validation"].map(map_example)
-    label2id, id2label = conll_util.get_label_mappings(conll_valid)
+    if args.op == "validate":
+        logging.info(f"Loading CoNLL VALIDATION set")
+        dataset = conll_datasets["validation"].map(map_example)
+    else:
+        logging.info(f"Loading CoNLL TEST set")
+        dataset = conll_datasets["test"].map(map_example)
+
+    label2id, id2label = conll_util.get_label_mappings(dataset)
 
     confusion_matrix = ner.NERBinaryConfusionMatrix()
-    for example in util.mytqdm(conll_valid, desc="validate"):
+    for example in util.mytqdm(dataset, desc="validate"):
         predictions = luke_util.eval_named_entity_spans(
             model, tokenizer, example["tokens"], nonentity_label, 16
         )
@@ -155,19 +159,27 @@ def validate(args):
             predictions, gold, confusion_matrix
         )
 
-    logging.info("Validation")
+
+    if args.op == "validate":
+        logging.info(f"On CoNLL VALIDATION:")
+    else:
+        logging.info(f"On CoNLL TEST:")
     logging.info(f"Confusion {confusion_matrix}")
 
 
 def main(args):
     util.init_logging()
-
+    logging.info(
+        "Depending on the operation being performed, not all args may be relevant."
+    )
     logging.info(f"args: {args}")
 
     if args.op == "train":
         train(args)
-    elif args.op == "validate":
+    elif args.op in {"validate", "test"}:
         validate(args)
+    else:
+        logging.error(f"Invalid op {args.op}")
 
 
 if __name__ == "__main__":
@@ -176,7 +188,7 @@ if __name__ == "__main__":
         "op",
         help="operation to perform",
         default="train",
-        choices=["train", "validate"],
+        choices=["train", "validate", "test"],
     )
     parser.add_argument(
         "--checkpoint", help="path of checkpoint to load", default=None, type=str

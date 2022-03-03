@@ -6,6 +6,7 @@ from ner import (
     compute_binary_confusion_matrix_from_bio,
     NERBinaryConfusionMatrix,
     compute_binary_confusion_matrix_from_batched_bio,
+    extract_named_entity_spans_from_chunks,
 )
 
 
@@ -211,6 +212,45 @@ class TestNerUtil(unittest.TestCase):
         self.assertEqual(
             NERBinaryConfusionMatrix(tp=1, fn=2, fp=2),
             compute_binary_confusion_matrix_from_batched_bio(pred, gold),
+        )
+
+    def test_extract_named_entity_spans_from_chunks(self):
+        self.assertEqual(
+            {"PER": [(1, 1)]}, extract_named_entity_spans_from_chunks(["O", "PER", "O"])
+        )
+
+        self.assertEqual(
+            {"PER": [(0, 0)]}, extract_named_entity_spans_from_chunks(["PER"])
+        )
+
+        self.assertEqual(
+            {"PER": [(0, 1)]}, extract_named_entity_spans_from_chunks(["PER", "PER"])
+        )
+
+        self.assertEqual(
+            {"PER": [(0, 0)], "ORG": [(1, 1)]},
+            extract_named_entity_spans_from_chunks(["PER", "ORG"]),
+        )
+
+        self.assertEqual(
+            {"PER": [(0, 0)], "ORG": [(2, 2)]},
+            extract_named_entity_spans_from_chunks(["PER", "O", "ORG"]),
+        )
+
+        self.assertEqual(
+            {"PER": [(0, 0)], "ORG": [(2, 3)]},
+            extract_named_entity_spans_from_chunks(["PER", "O", "ORG", "ORG"]),
+        )
+
+        self.assertEqual(
+            {"PER": [(0, 0)], "ORG": [(2, 3)]},
+            extract_named_entity_spans_from_chunks(["PER", "O", "ORG", "ORG"]),
+        )
+
+        tags = ["PER", "PER", "O", "ORG", "ORG", "ORG", "O", "O", "LOC", "O", "O"]
+        self.assertEqual(
+            {"PER": [(0, 1)], "ORG": [(3, 5)], "LOC": [(8, 8)]},
+            extract_named_entity_spans_from_chunks(tags),
         )
 
 

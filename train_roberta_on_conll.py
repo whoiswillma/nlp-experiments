@@ -44,7 +44,6 @@ def do_training(
                 batch = {k: v.to(DEVICE) for k, v in batch.items()}
                 # send 'input_ids', 'attention_mask' and 'labels' to the model
                 outputs = model(**batch)
-                # print(outputs, batch)
                 # the outputs are of shape (loss, logits)
                 loss = outputs[0]
                 loss.backward()
@@ -73,34 +72,21 @@ def do_training(
 
 
 def main():
-    # util.init_logging()
+    util.init_logging()
     # util.pytorch_set_num_threads(1)
 
     tokenizer = roberta_util.make_tokenizer()
-    # for data in datasets.load_dataset('conll2003'):
-    #     print(datasets.load_dataset('conll2003')['train'][0])
-    # print(datasets.load_dataset('conll2003'))
-    CONLL_DATASET = roberta_util.encode_conll(
-        datasets.load_dataset("conll2003"), tokenizer
-    )
+
+    CONLL_DATASET = roberta_util.encode_conll(datasets.load_dataset("conll2003"), tokenizer)
     CONLL_TRAIN = CONLL_DATASET["train"]
-    CONLL_TRAIN_10 = conll_util.downsample(CONLL_TRAIN, 10)
+    # CONLL_TRAIN_10 = conll_util.downsample(CONLL_TRAIN, 10)
     CONLL_TRAIN_1 = conll_util.downsample(CONLL_TRAIN, 1)
 
     num_labels = conll_util.num_labels(CONLL_TRAIN)
     id2label, label2id = conll_util.get_label_mappings(CONLL_TRAIN)
-    print(
-        num_labels,
-        id2label,
-        label2id,
-        "\n",
-        type(num_labels),
-        type(id2label),
-        type(label2id),
-    )
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
-    NUM_EPOCHS = 1
+    # NUM_EPOCHS = 3
 
     # # lr from SUMMARY paper
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -111,7 +97,7 @@ def main():
 
     train_data = torch.utils.data.DataLoader(CONLL_TRAIN_1, batch_size=4)
 
-    # do_training(model, NUM_EPOCHS, train_data, optimizer)
+    do_training(model, 1, train_data, optimizer)
 
     #     logging.info('Validation')
     #     logging.info(f'num_correct = {correct}')

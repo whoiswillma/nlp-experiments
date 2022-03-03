@@ -1,9 +1,8 @@
 import logging
-from typing import List, Set, Dict, Tuple, Optional
 from transformers import RobertaForTokenClassification, RobertaTokenizer
-import torch
 
-ROBERTA_VERSION = "roberta-base"
+
+ROBERTA_VERSION = "roberta-large"
 
 
 def make_model(num_labels, id2label, label2id):
@@ -41,10 +40,9 @@ def encode_conll(dataset, tokenizer):
         labels = example["ner_tags"] + [0] * (
             tokenizer.model_max_length - len(example["ner_tags"])
         )
+        # return the encodings and the extended ner_tags
         return {**encodings, "labels": labels}
 
     dataset = dataset.map(add_encodings)
     dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
-    dataloader = torch.utils.data.DataLoader(dataset["train"], batch_size=5)
-    print(next(iter(dataloader)), type(next(iter(dataloader))))
     return dataset

@@ -81,7 +81,7 @@ def load_checkpoint(
     name: str,
     model: Optional[torch.nn.Module] = None,
     opt: Optional[torch.optim.Optimizer] = None,
-):
+) -> dict[str, any]:
     checkpoint = torch.load(name)
 
     if model:
