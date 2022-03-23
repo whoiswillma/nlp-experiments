@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH -J slurm_validate_roberta_on_fewnerd_inter                        # Job name
+#SBATCH -o %j_inter_out.slurm                                           # output file (%j expands to jobID)
+#SBATCH -e %j_inter_err.slurm                                           # error log file (%j expands to jobID)
+#SBATCH --mail-type=ALL                                           # Request status by email 
+#SBATCH --mail-user=jc2739@cornell.edu                            # Email address to send results to.
+#SBATCH -N 1                                                      # Total number of nodes requested
+#SBATCH -n 1                                                      # Total number of cores requested
+#SBATCH --get-user-env                                            # retrieve the users login environment
+#SBATCH --mem=10000                                               # server memory requested (per node)
+#SBATCH -t 20:00:00                                                # Time limit (hh:mm:ss)
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:3090:1
+
+python3 /home/jc2739/nlp-experiments/train_roberta_on_fewnerd.py 'validate' --fewnerd_type='inter' --checkpoint='RobertaForTokenClassification-Checkpoint-e4-03-15@06-55.pt'

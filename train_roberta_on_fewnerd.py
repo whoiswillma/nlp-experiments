@@ -9,7 +9,12 @@ import util
 import fewnerd_util
 
 from transformers import get_scheduler
-from fewnerdparse.dataset import FEWNERD_SUPERVISED, FEWNERD_COARSE_FINE_TYPES
+from fewnerdparse.dataset import (
+    FEWNERD_SUPERVISED,
+    FEWNERD_INTRA,
+    FEWNERD_INTER,
+    FEWNERD_COARSE_FINE_TYPES,
+)
 
 DEVICE = None
 
@@ -20,9 +25,16 @@ def train(args):
     fewnerd_labels = [fst + "-" + scd for fst, scd in FEWNERD_COARSE_FINE_TYPES]
     num_labels, label2id, id2label = fewnerd_util.labels_to_mappings(fewnerd_labels)
 
-    FEWNERD_TRAIN = fewnerd_util.encode_fewnerd(
-        FEWNERD_SUPERVISED, tokenizer, label2id
-    )["train"]
+    if args.fewnerd_type == "sup":
+        FEWNERD_DATASET = FEWNERD_SUPERVISED
+    elif args.fewnerd_type == "inter":
+        FEWNERD_DATASET = FEWNERD_INTER
+    elif args.fewnerd_type == "intra":
+        FEWNERD_DATASET = FEWNERD_INTRA
+
+    FEWNERD_TRAIN = fewnerd_util.encode_fewnerd(FEWNERD_DATASET, tokenizer, label2id)[
+        "train"
+    ]
 
     # FEWNERD_TRAIN = fewnerd_util.encode_fewnerd(
     #     {
@@ -108,14 +120,21 @@ def evaluate(args):
 
     model = roberta_util.make_model(num_labels, id2label, label2id)
 
+    if args.fewnerd_type == "sup":
+        FEWNERD_DATASET = FEWNERD_SUPERVISED
+    elif args.fewnerd_type == "inter":
+        FEWNERD_DATASET = FEWNERD_INTER
+    elif args.fewnerd_type == "intra":
+        FEWNERD_DATASET = FEWNERD_INTRA
+
     if args.op == "validate":
         FEWNERD_VAL = fewnerd_util.encode_fewnerd(
-            FEWNERD_SUPERVISED, tokenizer, label2id
+            FEWNERD_DATASET, tokenizer, label2id
         )["dev"]
 
     else:
         FEWNERD_VAL = fewnerd_util.encode_fewnerd(
-            FEWNERD_SUPERVISED, tokenizer, label2id
+            FEWNERD_DATASET, tokenizer, label2id
         )["test"]
 
     val_data = torch.utils.data.DataLoader(FEWNERD_VAL, batch_size=args.batch_size)
@@ -199,7 +218,12 @@ if __name__ == "__main__":
         default="train",
         choices=["train", "validate", "test"],
     )
-
+    parser.add_argument(
+        "--fewnerd_type",
+        help="type of fewnerd data: sup, inter, intra",
+        default="sup",
+        choices=["sup", "inter", "intra"],
+    )
     parser.add_argument(
         "--checkpoint", help="path of checkpoint to load", default=None, type=str
     )
@@ -210,7 +234,6 @@ if __name__ == "__main__":
         default=2,
         type=int,
     )
-
     parser.add_argument("--epochs", help="number of epochs", default=5, type=int)
     parser.add_argument(
         "--learning_rate", help="learning rate", default=1e-5, type=float
