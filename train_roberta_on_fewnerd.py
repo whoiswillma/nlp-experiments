@@ -128,14 +128,14 @@ def evaluate(args):
         FEWNERD_DATASET = FEWNERD_INTRA
 
     if args.op == "validate":
-        FEWNERD_VAL = fewnerd_util.encode_fewnerd(
-            FEWNERD_DATASET, tokenizer, label2id
-        )["dev"]
+        FEWNERD_VAL = fewnerd_util.encode_fewnerd(FEWNERD_DATASET, tokenizer, label2id)[
+            "dev"
+        ]
 
     else:
-        FEWNERD_VAL = fewnerd_util.encode_fewnerd(
-            FEWNERD_DATASET, tokenizer, label2id
-        )["test"]
+        FEWNERD_VAL = fewnerd_util.encode_fewnerd(FEWNERD_DATASET, tokenizer, label2id)[
+            "test"
+        ]
 
     val_data = torch.utils.data.DataLoader(FEWNERD_VAL, batch_size=args.batch_size)
 

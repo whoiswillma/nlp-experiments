@@ -1,5 +1,5 @@
 __pycache__
-#*.pt
+*.pt
 *.log
 wifineparse
 fewnerdparse
@@ -12,4 +12,5 @@ bilstmcrf/env/
 *.slurm
 checkpoints/
 .vscode/
-
+slurm_output/
+logs/
